@@ -612,21 +612,11 @@
             }
 
             function resetHighlight(layer) {
-                if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
+                // If the country has already been guessed correctly, do nothing.
+                if (userAnswers[layer.feature.properties.name]) return;
                 
-                let styleKey;
-                const name = layer.feature.properties.name;
-                if (userAnswers[name]) {
-                    if (theme === 'earth') {
-                        const biome = getCountryBiome(name);
-                        styleKey = `guessed_${biome}`;
-                    } else {
-                        styleKey = 'guessed';
-                    }
-                } else {
-                    styleKey = 'default';
-                }
-                const style = getStyle(styleKey);
+                // Otherwise, reset its style to the default.
+                const style = getStyle('default');
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
             }
