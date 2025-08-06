@@ -12,15 +12,13 @@
         body { font-family: 'Inter', sans-serif; }
         .map-container { position: relative; }
         #map {
-            height: 70vh;
+            height: 65vh;
             width: 100%;
-            background-color: #a2d2ff;
             border-radius: 0.5rem;
-            border: 2px solid #1e3a8a;
             z-index: 1;
         }
-        .leaflet-container { background: #a2d2ff; }
-        #score-modal { z-index: 1001; }
+        .leaflet-container { background: var(--map-bg-color, #a2d2ff); }
+        #score-modal, #info-modal { z-index: 1001; }
         .permanent-tooltip {
             background-color: rgba(255, 255, 255, 0.9);
             border: none;
@@ -30,22 +28,10 @@
             color: #1e3a8a;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-        /* Custom Segmented Control */
-        .setting-control button {
-            background-color: #e5e7eb;
-            color: #374151;
-            transition: all 0.2s ease-in-out;
-        }
-        .setting-control button.active {
-            background-color: #3b82f6;
-            color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
         #settings-panel.disabled {
             opacity: 0.6;
             pointer-events: none;
         }
-        /* Combo and Score Styles */
         .combo-heat-max {
             color: #ef4444;
             animation: pulse 1s infinite;
@@ -72,42 +58,40 @@
             bottom: 150%;
             opacity: 1;
         }
+        .setting-control button {
+            transition: all 0.2s ease-in-out;
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4 transition-colors duration-300">
 
-    <div class="w-full max-w-6xl mx-auto bg-white p-6 rounded-xl shadow-2xl border border-gray-200">
+    <div id="main-container" class="w-full max-w-6xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-2xl border border-gray-200 transition-colors duration-300">
         <header class="text-center mb-4 relative">
-            <h1 class="text-4xl font-bold text-blue-900">World Map Quiz</h1>
-            <p id="subtitle" class="text-lg text-gray-600 mt-2">Configure your settings and press Start!</p>
+            <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
+            <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Configure your settings and press Start!</p>
             <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
-            <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
+            <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
         </header>
 
         <div class="map-container mb-6">
-            <div id="map" class="shadow-lg"></div>
+            <div id="map" class="shadow-lg border-2 border-blue-900"></div>
             
-            <!-- Status Display with Wrapped SVG Timer -->
             <div id="status-display-container" class="absolute top-3 left-3 z-10 hidden">
                 <div class="relative w-[90px] h-[45px]">
-                    <!-- Background and shadow -->
                     <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
-                    <!-- SVG for the animated border -->
                     <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
                         <path id="timer-progress-bar"
                               d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 2,35 L 2,10 A 8,8 0 0 1 10,2 L 45,2"
                               fill="none" stroke="#3b82f6" stroke-width="4"
                               style="transition: stroke-dashoffset 0.1s linear;"/>
                     </svg>
-                    <!-- Text content -->
                     <div id="timer-display" class="relative w-full h-full flex items-center justify-center text-blue-900 font-bold text-xl">
-                        <!-- Timer/combo text will be injected here -->
                     </div>
                 </div>
             </div>
 
-            <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-1/2 max-w-md z-10 text-center">
-                 <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl">Start Quiz</button>
+            <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-11/12 sm:w-1/2 max-w-md z-10 text-center">
+                 <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl w-full">Start Quiz</button>
                  <div class="relative">
                     <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
                     <div id="points-indicator"></div>
@@ -115,33 +99,63 @@
             </div>
         </div>
 
-        <div id="settings-panel" class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg shadow-inner">
-            <div class="space-y-3">
-                <h3 class="text-lg font-semibold text-gray-700">Play Style</h3>
-                <div id="play-style-options" class="setting-control flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                    <button data-value="zen" class="flex-1 py-2 px-4 rounded-md font-medium">Zen</button>
-                    <button data-value="timed" class="flex-1 py-2 px-4 rounded-md font-medium active">Timed</button>
-                    <button data-value="paced" class="flex-1 py-2 px-4 rounded-md font-medium">Paced</button>
-                    <button data-value="sprint" class="flex-1 py-2 px-4 rounded-md font-medium">Sprint</button>
+        <div id="settings-panel" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 bg-gray-50 p-6 rounded-lg shadow-inner transition-colors duration-300">
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Play Style</h3>
+                    <svg data-setting="playStyle" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="play-style-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="zen" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Zen</button>
+                    <button data-value="timed" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Timed</button>
+                    <button data-value="paced" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Paced</button>
+                    <button data-value="sprint" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Sprint</button>
                 </div>
             </div>
-            <div class="space-y-3">
-                <h3 class="text-lg font-semibold text-gray-700">Tab Order</h3>
-                <div id="tab-order-options" class="setting-control flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                    <button data-value="random" class="flex-1 py-2 px-4 rounded-md font-medium active">Random</button>
-                    <button data-value="alphabetical" class="flex-1 py-2 px-4 rounded-md font-medium">Alphabetical</button>
-                    <button data-value="path" class="flex-1 py-2 px-4 rounded-md font-medium">Path</button>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Tab Order</h3>
+                    <svg data-setting="tabOrder" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="tab-order-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="random" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Random</button>
+                    <button data-value="alphabetical" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Alphabetical</button>
+                    <button data-value="path" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Path</button>
+                </div>
+            </div>
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Difficulty</h3>
+                    <svg data-setting="difficulty" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="difficulty-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="easy" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Easy</button>
+                    <button data-value="normal" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Normal</button>
+                    <button data-value="hard" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Hard</button>
+                    <button data-value="extreme" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Extreme</button>
+                </div>
+            </div>
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Theme</h3>
+                    <svg data-setting="theme" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="theme-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
+                    <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
+                    <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
+                    <button data-value="oceanic" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Oceanic</button>
                 </div>
             </div>
         </div>
         <div class="mt-6 text-center">
-             <button id="finish-attempt-btn" class="bg-green-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-green-700 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed">Finish & Score</button>
+             <button id="finish-attempt-btn" class="bg-green-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-green-700 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed w-full md:w-auto">Finish & Score</button>
         </div>
     </div>
 
     <!-- Score Modal -->
     <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
+        <div id="score-modal-content" class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
             <h2 class="text-4xl font-bold text-blue-900 mb-4" id="score-title">Your Score</h2>
             <p class="text-8xl font-bold text-green-500 mb-2" id="final-score"></p>
             <p class="text-2xl font-semibold text-gray-700 mb-4" id="final-total-score-display"></p>
@@ -156,24 +170,35 @@
             </div>
         </div>
     </div>
+    
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center p-4">
+        <div id="info-modal-content" class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full text-left transform transition-all scale-95 opacity-100 relative">
+            <button id="close-info-modal-btn" class="absolute top-2 right-2 text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <h3 id="info-modal-title" class="text-2xl font-bold text-gray-800 mb-4">Setting Info</h3>
+            <div id="info-modal-body" class="text-gray-600 space-y-3"></div>
+        </div>
+    </div>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- MAP AND UI SETUP ---
+            let currentTileLayer = null;
             const map = L.map('map', { preferCanvas: true, zoomControl: false, worldCopyJump: true }).setView([20, 0], 2);
             L.control.zoom({ position: 'topright' }).addTo(map);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd', maxZoom: 10, minZoom: 2,
-            }).addTo(map);
             let tooltipLayerGroup = L.layerGroup().addTo(map);
 
             // --- STATE VARIABLES ---
-            let geoJsonLayer, selectedCountryLayer = null, timerInterval = null;
+            let geoJsonLayer, selectedCountryLayer = null, timerInterval = null, hintRevealInterval = null;
             let userAnswers = {}, countryData = {}, allCountries = [], countryPath = [];
             let quizState = 'pre-start'; // 'pre-start', 'playing', 'finished'
             let playStyle = 'timed'; // 'zen', 'timed', 'paced', 'sprint'
             let tabOrder = 'random';
+            let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme'
+            let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'oceanic'
             let quizSequence = [];
             let currentSequenceIndex = -1;
             
@@ -199,9 +224,7 @@
                 'bahamas': 'thebahamas', 'falklandislands': 'falklandislands(malvinas)',
                 'easttimor': 'timorleste', 'northmacedonia': 'macedonia', 'serbia': 'republicofserbia', 'czechia': 'czechrepublic'
             };
-            const specialCases = {
-                'congo': ['democraticrepublicofthecongo', 'republicofthecongo']
-            };
+            const specialCases = { 'congo': ['democraticrepublicofthecongo', 'republicofthecongo'] };
 
             const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paraguay uruguay argentina chile falklandislands Iceland Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar fsal japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman bae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
 
@@ -223,36 +246,97 @@
             const scoreTitle = document.getElementById('score-title');
             const playStyleOptions = document.getElementById('play-style-options');
             const tabOrderOptions = document.getElementById('tab-order-options');
+            const difficultyOptions = document.getElementById('difficulty-options');
+            const themeOptions = document.getElementById('theme-options');
             const startQuizBtn = document.getElementById('start-quiz-btn');
             const settingsPanel = document.getElementById('settings-panel');
             const scoreDisplay = document.getElementById('score-display');
             const pointsIndicator = document.getElementById('points-indicator');
+            const infoModal = document.getElementById('info-modal');
+            const infoModalTitle = document.getElementById('info-modal-title');
+            const infoModalBody = document.getElementById('info-modal-body');
+            const closeInfoModalBtn = document.getElementById('close-info-modal-btn');
+
 
             // --- SVG TIMER SETUP ---
-            let progressBarLength; // Declare here, initialize later
-
+            let progressBarLength; 
             finishAttemptBtn.style.display = 'none';
 
+            // --- THEME DATA ---
+            const themes = {
+                voyager: {
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#a2d2ff',
+                    styles: {
+                        default: { fillColor: '#60a5fa', weight: 1, color: '#1e3a8a', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#22c55e', weight: 1, color: '#166534', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#f59e0b', fillColor: '#facc15' },
+                        correctFinished: { fillColor: '#22c55e', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#ef4444', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#e5e7eb', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
+                    },
+                    classes: { body: "bg-gray-100", container: "bg-white", title: "text-blue-900", settings: "bg-gray-50", settingTitle: "text-gray-700", settingRail: "bg-gray-200", settingInactive: "text-gray-500", settingActive: "bg-white text-gray-800 shadow" }
+                },
+                midnight: {
+                    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#111827',
+                    styles: {
+                        default: { fillColor: '#4f46e5', weight: 1, color: '#a5b4fc', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#16a34a', weight: 1, color: '#86efac', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#f97316', fillColor: '#fdba74' },
+                        correctFinished: { fillColor: '#16a34a', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#dc2626', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#374151', weight: 1, color: '#6b7280', fillOpacity: 0.5 },
+                    },
+                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-300", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
+                },
+                earth: {
+                    url: 'https://stamen-tiles-{s}.a.ssl.fastly.net/terrain-background/{z}/{x}/{y}{r}.png',
+                    attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
+                    mapBg: '#c4a686',
+                    styles: {
+                        default: { fillColor: '#854d0e', weight: 1, color: '#422006', fillOpacity: 0.6 },
+                        guessed: { fillColor: '#15803d', weight: 1, color: '#052e16', fillOpacity: 0.7 },
+                        selected: { weight: 4, color: '#ca8a04', fillColor: '#fef08a' },
+                        correctFinished: { fillColor: '#15803d', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#b91c1c', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#d6d3d1', weight: 1, color: '#a8a29e', fillOpacity: 0.5 },
+                    },
+                    classes: { body: "bg-stone-300", container: "bg-stone-100", title: "text-yellow-900", settings: "bg-stone-200", settingTitle: "text-stone-700", settingRail: "bg-stone-300", settingInactive: "text-stone-500", settingActive: "bg-stone-50 text-stone-800 shadow" }
+                },
+                oceanic: {
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
+                    attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
+                    mapBg: '#005f73',
+                    styles: {
+                        default: { fillColor: '#0a9396', weight: 1, color: '#e9d8a6', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#94d2bd', weight: 1, color: '#e9d8a6', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#ee9b00', fillColor: '#fefae0' },
+                        correctFinished: { fillColor: '#94d2bd', weight: 1, color: 'black', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#ae2012', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#bbdef0', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
+                    },
+                     classes: { body: "bg-cyan-100", container: "bg-cyan-50", title: "text-cyan-900", settings: "bg-cyan-100", settingTitle: "text-cyan-800", settingRail: "bg-cyan-200", settingInactive: "text-cyan-600", settingActive: "bg-white text-orange-600 shadow" }
+                }
+            };
+            
             // --- UTILITY FUNCTIONS ---
-            function normalize(str) {
-                return str.toLowerCase().replace(/[\s\.\-&'â]/g, '');
-            }
+            function normalize(str) { return str.toLowerCase().replace(/[\s\.\-&'â]/g, ''); }
 
             function getVisualCenter(layer) {
                 const feature = layer.feature;
                 let center = layer.getBounds().getCenter(); 
-
                 if (feature.geometry.type === 'MultiPolygon') {
                     let largestArea = 0;
                     let bestCenter = center;
-
                     feature.geometry.coordinates.forEach(polygonGroup => {
                         const outerBoundary = polygonGroup[0];
                         const latLngs = outerBoundary.map(coord => [coord[1], coord[0]]); 
                         const tempPolygon = L.polygon(latLngs);
                         const bounds = tempPolygon.getBounds();
                         const area = (bounds.getNorth() - bounds.getSouth()) * (bounds.getEast() - bounds.getWest());
-
                         if (area > largestArea) {
                             largestArea = area;
                             bestCenter = bounds.getCenter();
@@ -276,7 +360,7 @@
                     geoData.features = geoData.features.filter(feature => feature.properties.name);
 
                     geoJsonLayer = L.geoJson(geoData, {
-                        style: defaultStyle,
+                        style: () => themes[theme].styles.default,
                         onEachFeature: onEachFeature
                     }).addTo(map);
                     
@@ -291,16 +375,90 @@
 
                     allCountries.sort((a, b) => a.name.localeCompare(b.name));
                     countryPath = pathData.toLowerCase().split(/\s+/);
-                    updateTimerDisplay(); // Initial display setup
+                    applyTheme(theme, true); // Apply default theme on load
+                    updateTimerDisplay();
                 });
 
+            // --- THEME LOGIC ---
+            function applyTheme(newThemeName, isInitial = false) {
+                const oldThemeName = theme;
+                theme = newThemeName;
+                const themeData = themes[theme];
+
+                if (currentTileLayer) map.removeLayer(currentTileLayer);
+                currentTileLayer = L.tileLayer(themeData.url, {
+                    attribution: themeData.attribution,
+                    subdomains: 'abcd', maxZoom: 10, minZoom: 2,
+                }).addTo(map);
+                
+                document.documentElement.style.setProperty('--map-bg-color', themeData.mapBg);
+                updateThemeClasses(themes[oldThemeName].classes, themeData.classes, isInitial);
+
+                if (geoJsonLayer) {
+                    geoJsonLayer.eachLayer(layer => {
+                        const name = layer.feature.properties.name;
+                        if (quizState === 'finished') {
+                           let isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
+                           layer.setStyle(isGuessed ? themes[theme].styles.correctFinished : themes[theme].styles.incorrectFinished);
+                        } else if (layer === selectedCountryLayer) {
+                            layer.setStyle(themes[theme].styles.selected);
+                        } else if (userAnswers[name]) {
+                            layer.setStyle(themes[theme].styles.guessed);
+                        } else if (name === 'Antarctica') {
+                             layer.setStyle(themes[theme].styles.unclickable);
+                        } else {
+                            layer.setStyle(themes[theme].styles.default);
+                        }
+                    });
+                }
+            }
+            
+            function updateThemeClasses(oldClasses, newClasses, isInitial) {
+                 const classMap = {
+                    'body': document.body, 'container': document.getElementById('main-container'),
+                    'title': document.getElementById('main-title'), 'settings': document.getElementById('settings-panel'),
+                    'score-modal-content': document.getElementById('score-modal-content'),
+                    'info-modal-content': document.getElementById('info-modal-content')
+                };
+
+                Object.keys(classMap).forEach(key => {
+                    if (oldClasses[key] && newClasses[key]) {
+                        classMap[key].classList.remove(...oldClasses[key].split(' '));
+                        classMap[key].classList.add(...newClasses[key].split(' '));
+                    }
+                });
+                
+                document.querySelectorAll('.setting-title').forEach(el => {
+                    el.classList.remove(...oldClasses.settingTitle.split(' '));
+                    el.classList.add(...newClasses.settingTitle.split(' '));
+                });
+
+                document.querySelectorAll('.setting-control').forEach(el => {
+                    el.classList.remove(...oldClasses.settingRail.split(' '));
+                    el.classList.add(...newClasses.settingRail.split(' '));
+                    
+                    el.querySelectorAll('button').forEach(btn => {
+                        if (isInitial) { // On first load, set initial classes
+                            if(btn.classList.contains('active')) {
+                                btn.classList.add(...newClasses.settingActive.split(' '));
+                            } else {
+                                btn.classList.add(...newClasses.settingInactive.split(' '));
+                            }
+                        } else { // On theme change, swap classes
+                            if(btn.classList.contains('active')) {
+                                btn.classList.remove(...oldClasses.settingActive.split(' '));
+                                btn.classList.add(...newClasses.settingActive.split(' '));
+                            } else {
+                                btn.classList.remove(...oldClasses.settingInactive.split(' '));
+                                btn.classList.add(...newClasses.settingInactive.split(' '));
+                            }
+                        }
+                    });
+                });
+            }
+
             // --- STYLING FUNCTIONS ---
-            function defaultStyle() { return { fillColor: '#60a5fa', weight: 1, color: '#1e3a8a', fillOpacity: 0.7 }; }
-            function guessedStyle() { return { fillColor: '#22c55e', weight: 1, color: '#166534', fillOpacity: 0.8 }; }
-            function selectedStyle() { return { weight: 4, color: '#f59e0b', fillColor: '#facc15' }; }
-            function correctFinishedStyle() { return { fillColor: '#22c55e', weight: 1, color: 'white', fillOpacity: 0.9 }; }
-            function incorrectFinishedStyle() { return { fillColor: '#ef4444', weight: 1, color: 'white', fillOpacity: 0.9 }; }
-            function unclickableStyle() { return { fillColor: '#e5e7eb', weight: 1, color: '#9ca3af', fillOpacity: 0.5 }; }
+            function getStyle(styleName) { return themes[theme].styles[styleName]; }
 
             // --- MAP INTERACTION LOGIC ---
             function getMainLayer(layer) {
@@ -313,7 +471,7 @@
                 const name = feature.properties.name;
                 countryData[name] = layer;
                 if (name === 'Antarctica') {
-                    layer.setStyle(unclickableStyle());
+                    layer.setStyle(getStyle('unclickable'));
                     return;
                 }
                 layer.on({
@@ -333,7 +491,7 @@
 
             function highlightFeature(layer) {
                 if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
-                const style = { weight: 3, color: '#fbbf24' };
+                const style = { weight: 3, color: getStyle('selected').color };
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
                 layer.bringToFront();
@@ -341,49 +499,85 @@
 
             function resetHighlight(layer) {
                 if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
-                geoJsonLayer.resetStyle(layer);
-                getRelatedLayers(layer).forEach(l => geoJsonLayer.resetStyle(l));
+                layer.setStyle(getStyle('default'));
+                getRelatedLayers(layer).forEach(l => l.setStyle(getStyle('default')));
             }
             
             function selectCountry(layer) {
                 if (!layer || userAnswers[layer.feature.properties.name]) return;
+                clearInterval(hintRevealInterval);
 
                 if (selectedCountryLayer && !userAnswers[selectedCountryLayer.feature.properties.name]) {
-                    geoJsonLayer.resetStyle(selectedCountryLayer);
-                    getRelatedLayers(selectedCountryLayer).forEach(l => geoJsonLayer.resetStyle(l));
+                    selectedCountryLayer.setStyle(getStyle('default'));
+                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('default')));
                 }
                 selectedCountryLayer = layer;
-                selectedCountryLayer.setStyle(selectedStyle());
-                getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(selectedStyle()));
+                selectedCountryLayer.setStyle(getStyle('selected'));
+                getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('selected')));
                 selectedCountryLayer.bringToFront();
                 guessInput.value = '';
                 guessInput.focus();
-                guessInput.placeholder = `Guess the selected country...`;
-                countrySelectedTimestamp = Date.now();
                 
-                if (playStyle === 'paced') {
-                    startPacedTimer();
+                updateHintDisplay();
+                countrySelectedTimestamp = Date.now();
+                if (playStyle === 'paced') startPacedTimer();
+            }
+
+            function updateHintDisplay() {
+                const name = selectedCountryLayer.feature.properties.name;
+                let placeholder = '';
+
+                switch (difficulty) {
+                    case 'easy':
+                        let revealed = name.split('').map((c) => c === ' ' ? ' ' : '_ ');
+                        let unrevealedIndices = [];
+                        for(let i=1; i < name.length; i++) {
+                            if (name[i] !== ' ') unrevealedIndices.push(i);
+                        }
+                        revealed[0] = name[0];
+                        placeholder = `${revealed.join('')} (${name.length} letters)`;
+                        guessInput.placeholder = placeholder;
+                        
+                        hintRevealInterval = setInterval(() => {
+                            if (unrevealedIndices.length > 0) {
+                                const randomIndex = Math.floor(Math.random() * unrevealedIndices.length);
+                                const indexToReveal = unrevealedIndices.splice(randomIndex, 1)[0];
+                                revealed[indexToReveal] = name[indexToReveal];
+                                guessInput.placeholder = `${revealed.join('')} (${name.length} letters)`;
+                            } else {
+                                clearInterval(hintRevealInterval);
+                            }
+                        }, 3000);
+                        break;
+                    case 'normal':
+                        placeholder = name[0] + name.slice(1).replace(/[a-zA-Z]/g, '_ ');
+                        guessInput.placeholder = placeholder;
+                        break;
+                    case 'hard':
+                        placeholder = name.replace(/[a-zA-Z]/g, '_ ');
+                        guessInput.placeholder = placeholder;
+                        break;
+                    case 'extreme':
+                        guessInput.placeholder = `Guess the selected country...`;
+                        break;
                 }
             }
+
 
             function smartFitBounds(layer) {
                 const bounds = layer.getBounds();
                 const lonSpan = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
                 const countryName = layer.feature.properties.name;
 
-                if (countryName === 'Russia') {
-                    map.flyTo(getVisualCenter(layer), 2);
-                } else if (lonSpan > 180) {
-                    map.flyTo(getVisualCenter(layer), 5);
-                } else {
+                if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
+                else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
+                else {
                     const latSpan = bounds.getNorth() - bounds.getSouth();
                     const lngSpan = bounds.getEast() - bounds.getWest();
                     const size = latSpan * lngSpan;
-
                     let maxZoomLevel = 4;
                     if (size < 50) maxZoomLevel = 5;
                     if (size < 5) maxZoomLevel = 6;
-                    
                     map.fitBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
                 }
             }
@@ -392,7 +586,6 @@
                 for (let i = 0; i < quizSequence.length; i++) {
                     currentSequenceIndex = (currentSequenceIndex + 1) % quizSequence.length;
                     const nextCountry = quizSequence[currentSequenceIndex];
-                    
                     if (!userAnswers[nextCountry.name]) {
                         selectCountry(nextCountry.layer);
                         smartFitBounds(nextCountry.layer);
@@ -406,7 +599,6 @@
                 for (let i = 0; i < quizSequence.length; i++) {
                     currentSequenceIndex = (currentSequenceIndex - 1 + quizSequence.length) % quizSequence.length;
                     const prevCountry = quizSequence[currentSequenceIndex];
-                    
                     if (!userAnswers[prevCountry.name]) {
                         selectCountry(prevCountry.layer);
                         smartFitBounds(prevCountry.layer);
@@ -462,19 +654,17 @@
                 if (isGuessCorrect(guess, correctName)) {
                     if (userAnswers[correctName]) return;
 
+                    clearInterval(hintRevealInterval);
                     userAnswers[correctName] = true;
-                    if (playStyle === 'sprint') {
-                        processCorrectGuessForCombo(guess, correctName);
-                    }
+                    if (playStyle === 'sprint') processCorrectGuessForCombo(guess, correctName);
                     
-                    selectedCountryLayer.setStyle(guessedStyle());
-                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(guessedStyle()));
+                    selectedCountryLayer.setStyle(getStyle('guessed'));
+                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('guessed')));
                     finishAttemptBtn.disabled = false;
                     guessInput.value = '';
                     guessInput.placeholder = `Correct!`;
                     
                     setTimeout(() => {
-                        guessInput.placeholder = 'Type country name...';
                         selectNextCountry();
                     }, 500);
                 }
@@ -492,7 +682,7 @@
             function handleScoring(guess, correctName) {
                 const basePoints = 100;
                 const accuracyBonus = Math.max(0, (correctName.length - levenshtein(normalize(guess), normalize(correctName))) / correctName.length) * 50;
-                const timeTaken = (Date.now() - countrySelectedTimestamp) / 1000; // in seconds
+                const timeTaken = (Date.now() - countrySelectedTimestamp) / 1000;
                 const speedBonus = Math.max(0, 100 - (timeTaken * 5));
                 
                 const pointsGained = Math.round((basePoints + accuracyBonus + speedBonus) * comboMultiplier);
@@ -504,14 +694,11 @@
 
             function startComboTimer() {
                 const startTime = Date.now();
-                
                 comboTimerInterval = setInterval(() => {
                     const elapsedTime = Date.now() - startTime;
                     const remainingPercentage = Math.max(0, 100 - (elapsedTime / COMBO_DURATION) * 100);
-                    
                     const offset = progressBarLength * (1 - (remainingPercentage / 100));
                     timerProgressBar.style.strokeDashoffset = offset;
-
                     if (remainingPercentage <= 0) {
                         clearInterval(comboTimerInterval);
                         resetCombo();
@@ -522,33 +709,21 @@
             function resetCombo() {
                 comboCount = 0;
                 updateComboMeter();
-                timerProgressBar.style.strokeDashoffset = progressBarLength;
+                if(progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
             }
 
-            function updateScoreDisplay() {
-                scoreDisplay.textContent = `Score: ${score}`;
-            }
+            function updateScoreDisplay() { scoreDisplay.textContent = `Score: ${score}`; }
 
             function updateComboMeter() {
                 timerDisplay.classList.remove('combo-heat-max');
-                
                 comboMultiplier = 1;
-
-                if (comboCount === 0) {
-                    timerDisplay.textContent = '1x';
-                    return;
-                }
-                
-                if (comboCount === 1) {
-                    timerDisplay.textContent = '🔥1x';
-                } else if (comboCount === 2) {
-                    timerDisplay.textContent = '🔥1x🔥';
-                } else {
-                    comboMultiplier = Math.min(8, 1 + (comboCount - 2)); // 2x at 3, 3x at 4, etc., max 8x
+                if (comboCount === 0) { timerDisplay.textContent = '1x'; return; }
+                if (comboCount === 1) timerDisplay.textContent = '🔥1x';
+                else if (comboCount === 2) timerDisplay.textContent = '🔥1x🔥';
+                else {
+                    comboMultiplier = Math.min(8, 1 + (comboCount - 2)); 
                     timerDisplay.textContent = `${comboMultiplier}x`;
-                    if (comboMultiplier >= 8) {
-                        timerDisplay.classList.add('combo-heat-max');
-                    }
+                    if (comboMultiplier >= 8) timerDisplay.classList.add('combo-heat-max');
                 }
             }
 
@@ -556,33 +731,43 @@
                 pointsIndicator.textContent = `+${points}`;
                 pointsIndicator.style.backgroundColor = comboMultiplier > 1 ? '#ef4444' : '#22c55e';
                 pointsIndicator.classList.add('show');
-                setTimeout(() => {
-                    pointsIndicator.classList.remove('show');
-                }, 1000);
+                setTimeout(() => { pointsIndicator.classList.remove('show'); }, 1000);
             }
 
             // --- SETTINGS AND QUIZ LOGIC ---
-            function handleSettingClick(e, container) {
-                if (e.target.tagName === 'BUTTON') {
-                    container.querySelector('.active').classList.remove('active');
-                    e.target.classList.add('active');
-                    return e.target.dataset.value;
+            function handleSettingClick(e) {
+                const button = e.target.closest('button');
+                if (!button) return null;
+                const container = button.parentElement;
+
+                const currentActive = container.querySelector('.active');
+                if(currentActive) {
+                    currentActive.classList.remove('active', ...themes[theme].classes.settingActive.split(' '));
+                    currentActive.classList.add(...themes[theme].classes.settingInactive.split(' '));
                 }
-                return null;
+                button.classList.add('active', ...themes[theme].classes.settingActive.split(' '));
+                button.classList.remove(...themes[theme].classes.settingInactive.split(' '));
+
+                return button.dataset.value;
             }
 
             playStyleOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e, playStyleOptions);
-                if (value) {
-                    playStyle = value;
-                    updateTimerDisplay(); // Update display based on new style
-                }
+                const value = handleSettingClick(e);
+                if (value) { playStyle = value; updateTimerDisplay(); }
             });
-
             tabOrderOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e, tabOrderOptions);
+                const value = handleSettingClick(e);
                 if (value) tabOrder = value;
             });
+            difficultyOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e);
+                if (value) difficulty = value;
+            });
+            themeOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e);
+                if(value) applyTheme(value);
+            });
+
 
             function startQuiz() {
                 quizState = 'playing';
@@ -594,16 +779,13 @@
                 settingsPanel.classList.add('disabled');
                 statusDisplayContainer.classList.remove('hidden');
 
-                // --- Initialize SVG progress bar length now that it's visible ---
-                if (!progressBarLength) { // Only run this once
+                if (!progressBarLength) {
                     progressBarLength = timerProgressBar.getTotalLength();
                     timerProgressBar.style.strokeDasharray = progressBarLength;
                     timerProgressBar.style.strokeDashoffset = progressBarLength;
                 }
                 
-                if (playStyle === 'sprint') {
-                    scoreDisplay.classList.remove('hidden');
-                }
+                if (playStyle === 'sprint') scoreDisplay.classList.remove('hidden');
                 
                 quizSequence = [];
                 currentSequenceIndex = -1;
@@ -662,29 +844,28 @@
                 scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
                 missesContainer.innerHTML = missesHTML;
                 
-                if (playStyle === 'sprint') {
-                    finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
-                } else {
-                    finalTotalScoreDisplay.textContent = '';
-                }
+                if (playStyle === 'sprint') finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
+                else finalTotalScoreDisplay.textContent = '';
 
                 scoreModal.classList.remove('hidden');
                 scoreModal.classList.add('flex');
-                setTimeout(() => scoreModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50);
+                setTimeout(() => scoreModal.querySelector('#score-modal-content').classList.remove('scale-95', 'opacity-0'), 50);
             }
 
             finishAttemptBtn.addEventListener('click', () => finishQuiz('manual'));
             
-            function hideModal() {
-                scoreModal.querySelector('div').classList.add('scale-95', 'opacity-0');
+            function hideModal(modal) {
+                const content = modal.querySelector('div');
+                content.classList.add('scale-95', 'opacity-0');
                 setTimeout(() => {
-                     scoreModal.classList.add('hidden');
-                     scoreModal.classList.remove('flex');
+                     modal.classList.add('hidden');
+                     modal.classList.remove('flex');
+                     content.classList.remove('scale-95', 'opacity-0'); // Reset for next time
                 }, 300);
             }
 
-            closeModalBtn.addEventListener('click', () => { hideModal(); resetGame(); });
-            viewFinishedMapBtn.addEventListener('click', () => { hideModal(); showFinishedMap(); });
+            closeModalBtn.addEventListener('click', () => { hideModal(scoreModal); resetGame(); });
+            viewFinishedMapBtn.addEventListener('click', () => { hideModal(scoreModal); showFinishedMap(); });
             backToQuizBtn.addEventListener('click', () => resetGame());
 
             function showFinishedMap() {
@@ -696,16 +877,14 @@
                 subtitle.textContent = "Here's a review of your answers.";
                 scoreDisplay.classList.add('hidden');
                 statusDisplayContainer.classList.add('hidden');
-                
                 tooltipLayerGroup.clearLayers();
                 
                 geoJsonLayer.eachLayer(layer => {
                     const countryName = layer.feature.properties.name;
                     if (countryName === 'Antarctica') return;
-                    
                     layer.unbindTooltip();
                     let isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
-                    layer.setStyle(isGuessed ? correctFinishedStyle() : incorrectFinishedStyle());
+                    layer.setStyle(isGuessed ? getStyle('correctFinished') : getStyle('incorrectFinished'));
                     
                     const center = getVisualCenter(layer);
                     L.marker(center, { opacity: 0 })
@@ -725,40 +904,34 @@
                 backToQuizBtn.classList.add('hidden');
                 subtitle.textContent = "Configure your settings and press Start!";
                 scoreDisplay.classList.add('hidden');
-
                 tooltipLayerGroup.clearLayers();
                 
                 geoJsonLayer.eachLayer(layer => {
-                    if (layer.feature.properties.name !== 'Antarctica') {
-                        geoJsonLayer.resetStyle(layer);
+                    if (layer.feature.properties.name === 'Antarctica') layer.setStyle(getStyle('unclickable'));
+                    else {
+                        layer.setStyle(getStyle('default'));
                         layer.unbindTooltip();
                     }
                 });
+
                 userAnswers = {};
                 selectedCountryLayer = null;
                 guessInput.value = '';
                 guessInput.placeholder = 'Type country name...';
-                
                 score = 0;
                 updateScoreDisplay();
                 stopAllTimers();
                 resetCombo();
                 updateComboMeter();
-                if (progressBarLength) { // Check if it was initialized
-                    timerProgressBar.style.strokeDashoffset = progressBarLength;
-                }
-
-                updateTimerDisplay(); // Resets display text
+                if (progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
+                updateTimerDisplay();
             }
             
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Tab' && quizState === 'playing') {
                     e.preventDefault();
-                    if (e.shiftKey) {
-                        selectPreviousCountry();
-                    } else {
-                        selectNextCountry();
-                    }
+                    if (e.shiftKey) selectPreviousCountry();
+                    else selectNextCountry();
                 }
             });
 
@@ -772,28 +945,27 @@
                 timerInterval = setInterval(() => {
                     timeRemaining--;
                     updateTimerDisplay();
-                    if (timeRemaining <= 0) {
-                        finishQuiz('time');
-                    }
+                    if (timeRemaining <= 0) finishQuiz('time');
                 }, 1000);
             }
 
             function startPacedTimer() {
-                stopAllTimers(); // Stop previous paced timer
+                stopAllTimers();
                 pacedTimeRemaining = PACED_DURATION;
                 updateTimerDisplay();
                 timerInterval = setInterval(() => {
                     pacedTimeRemaining--;
                     updateTimerDisplay();
                     if (pacedTimeRemaining < 0) {
-                        finishQuiz('time');
+                        clearInterval(timerInterval);
+                        selectNextCountry(); // Considered a miss, move to next
                     }
                 }, 1000);
             }
             
             function updateTimerDisplay() {
                 statusDisplayContainer.classList.remove('hidden');
-                timerProgressBar.style.display = 'none'; // Hide by default
+                timerProgressBar.style.display = 'none';
                 
                 switch(playStyle) {
                     case 'zen':
@@ -806,14 +978,14 @@
                         timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
                         break;
                     case 'paced':
-                        timerProgressBar.style.display = 'block'; // Show for paced
+                        timerProgressBar.style.display = 'block';
                         if (quizState === 'pre-start') pacedTimeRemaining = PACED_DURATION;
                         timerDisplay.textContent = `${pacedTimeRemaining}s`;
                         const pacedOffset = progressBarLength * (1 - (pacedTimeRemaining / PACED_DURATION));
                         timerProgressBar.style.strokeDashoffset = pacedOffset;
                         break;
                     case 'sprint':
-                        timerProgressBar.style.display = 'block'; // Show for sprint
+                        timerProgressBar.style.display = 'block';
                         updateComboMeter();
                         break;
                 }
@@ -822,9 +994,68 @@
             function stopAllTimers() {
                 clearInterval(timerInterval);
                 clearInterval(comboTimerInterval);
+                clearInterval(hintRevealInterval);
                 timerInterval = null;
                 comboTimerInterval = null;
+                hintRevealInterval = null;
             }
+
+            // --- INFO MODAL LOGIC ---
+            const settingsInfo = {
+                playStyle: {
+                    title: 'Play Style',
+                    content: `
+                        <p><strong>Zen:</strong> No time limits. Play at your own pace.</p>
+                        <p><strong>Timed:</strong> A 15-minute timer for the entire quiz.</p>
+                        <p><strong>Paced:</strong> 15 seconds to guess each country.</p>
+                        <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.`
+                },
+                tabOrder: {
+                    title: 'Tab Order',
+                    content: `
+                        <p><strong>Random:</strong> Countries are selected in a random order.</p>
+                        <p><strong>Alphabetical:</strong> Countries are selected in alphabetical order.</p>
+                        <p><strong>Path:</strong> Countries are selected following a logical geographical path across the globe.`
+                },
+                difficulty: {
+                    title: 'Difficulty',
+                    content: `
+                        <p><strong>Easy:</strong> Shows the first letter, the number of letters, and reveals a random letter every 3 seconds.</p>
+                        <p><strong>Normal:</strong> Shows the first letter and underscores for the rest of the word.</p>
+                        <p><strong>Hard:</strong> Shows only underscores representing the number of letters.</p>
+                        <p><strong>Extreme:</strong> No hints are provided.`
+                },
+                theme: {
+                    title: 'Theme',
+                    content: `
+                        <p><strong>Voyager:</strong> The classic, light-mode map.</p>
+                        <p><strong>Midnight:</strong> A sleek, dark-mode theme.</p>
+                        <p><strong>Earth:</strong> A terrain-focused, natural-color theme.</p>
+                        <p><strong>Oceanic:</strong> A blue-hued theme emphasizing water bodies.`
+                }
+            };
+
+            settingsPanel.addEventListener('click', (e) => {
+                const icon = e.target.closest('.info-icon');
+                if (icon) {
+                    const settingKey = icon.dataset.setting;
+                    const info = settingsInfo[settingKey];
+                    if (info) {
+                        infoModalTitle.textContent = info.title;
+                        infoModalBody.innerHTML = info.content;
+                        infoModal.classList.remove('hidden');
+                        infoModal.classList.add('flex');
+                        setTimeout(() => infoModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 10);
+                    }
+                }
+            });
+
+            closeInfoModalBtn.addEventListener('click', () => hideModal(infoModal));
+            infoModal.addEventListener('click', (e) => {
+                if (e.target === infoModal) {
+                    hideModal(infoModal);
+                }
+            });
         });
     </script>
 </body>
