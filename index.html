@@ -729,6 +729,15 @@
                     const nextCountry = quizSequence[currentSequenceIndex];
                     if (!userAnswers[nextCountry.name] && (!countryData[nextCountry.name].options || countryData[nextCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
                         guessInput.value = `Click on: ${nextCountry.name}`;
+                        
+                        // --- TEXT TO SPEECH ---
+                        if (window.speechSynthesis) {
+                            window.speechSynthesis.cancel(); // Stop any previous speech
+                            const utterance = new SpeechSynthesisUtterance(nextCountry.name);
+                            window.speechSynthesis.speak(utterance);
+                        }
+                        // --- END TEXT TO SPEECH ---
+
                         mirrorTries = 4;
                         countrySelectedTimestamp = Date.now();
                         return;
@@ -743,6 +752,15 @@
                     const prevCountry = quizSequence[currentSequenceIndex];
                      if (!userAnswers[prevCountry.name] && (!countryData[prevCountry.name].options || countryData[prevCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
                         guessInput.value = `Click on: ${prevCountry.name}`;
+                        
+                        // --- TEXT TO SPEECH ---
+                        if (window.speechSynthesis) {
+                           window.speechSynthesis.cancel(); // Stop any previous speech
+                           const utterance = new SpeechSynthesisUtterance(prevCountry.name);
+                           window.speechSynthesis.speak(utterance);
+                        }
+                        // --- END TEXT TO SPEECH ---
+
                         mirrorTries = 4;
                         countrySelectedTimestamp = Date.now();
                         return;
@@ -1142,6 +1160,12 @@
                 subtitle.textContent = "Configure your settings and press Start!";
                 scoreDisplay.classList.add('hidden');
                 tooltipLayerGroup.clearLayers();
+                
+                // --- TTS ---
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                }
+                // --- END TTS ---
                 
                 geoJsonLayer.eachLayer(layer => {
                     if (layer.feature.properties.name === 'Antarctica') layer.setStyle(getStyle('unclickable'));
