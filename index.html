@@ -725,6 +725,20 @@
                 }
                 finishQuiz('manual'); // All countries are either guessed or missed
             }
+            
+            function promptPreviousMirrorCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex - 1 + quizSequence.length) % quizSequence.length;
+                    const prevCountry = quizSequence[currentSequenceIndex];
+                     if (!userAnswers[prevCountry.name] && (!countryData[prevCountry.name].options || countryData[prevCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
+                        guessInput.value = `Click on: ${prevCountry.name}`;
+                        mirrorTries = 4;
+                        countrySelectedTimestamp = Date.now();
+                        return;
+                    }
+                }
+                finishQuiz('manual');
+            }
 
             function selectPreviousCountry() {
                 for (let i = 0; i < quizSequence.length; i++) {
@@ -1143,10 +1157,21 @@
             }
             
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Tab' && quizState === 'playing' && difficulty !== 'mirror') {
+                if (e.key === 'Tab' && quizState === 'playing') {
                     e.preventDefault();
-                    if (e.shiftKey) selectPreviousCountry();
-                    else selectNextCountry();
+                    if (difficulty === 'mirror') {
+                        if (e.shiftKey) {
+                           promptPreviousMirrorCountry();
+                        } else {
+                           promptNextMirrorCountry();
+                        }
+                    } else {
+                        if (e.shiftKey) {
+                            selectPreviousCountry();
+                        } else {
+                            selectNextCountry();
+                        }
+                    }
                 }
             });
 
