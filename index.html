@@ -45,6 +45,40 @@
             opacity: 0.6;
             pointer-events: none;
         }
+        /* Combo and Score Styles */
+        #combo-text {
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        .combo-heat-max {
+            color: #ef4444;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        #points-indicator {
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: white;
+            opacity: 0;
+            transition: all 0.5s ease-out;
+            pointer-events: none;
+        }
+        #points-indicator.show {
+            bottom: 150%;
+            opacity: 1;
+        }
+        #combo-bar {
+            transition: width 0.1s linear, background-color 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4">
@@ -54,6 +88,7 @@
             <h1 class="text-4xl font-bold text-blue-900">World Map Quiz</h1>
             <p id="subtitle" class="text-lg text-gray-600 mt-2">Configure your settings and press Start!</p>
             <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
+            <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
         </header>
 
         <div class="map-container mb-6">
@@ -61,7 +96,14 @@
             <div id="timer-display" class="absolute top-3 left-3 bg-white bg-opacity-80 text-blue-900 font-bold text-xl px-3 py-1 rounded-lg shadow-md z-10">15:00</div>
             <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-1/2 max-w-md z-10 text-center">
                  <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl">Start Quiz</button>
-                 <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
+                 <div class="relative">
+                    <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
+                    <div id="points-indicator"></div>
+                 </div>
+                 <div id="combo-container" class="hidden w-full bg-gray-200 rounded-full h-2.5 mt-3 shadow-inner overflow-hidden">
+                    <div id="combo-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                 </div>
+                 <div id="combo-text" class="hidden h-8 mt-1 text-lg font-bold"></div>
             </div>
         </div>
 
@@ -93,7 +135,8 @@
     <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
             <h2 class="text-4xl font-bold text-blue-900 mb-4" id="score-title">Your Score</h2>
-            <p class="text-8xl font-bold text-green-500 mb-4" id="final-score"></p>
+            <p class="text-8xl font-bold text-green-500 mb-2" id="final-score"></p>
+            <p class="text-2xl font-semibold text-gray-700 mb-4" id="final-total-score-display"></p>
             <p class="text-lg text-gray-600 mb-6" id="score-details"></p>
             <div id="results-list" class="text-left max-h-60 overflow-y-auto mb-6 border border-gray-200 rounded-lg p-4">
                 <h3 class="font-bold text-lg mb-2 text-red-700">Missed Answers:</h3>
@@ -125,6 +168,14 @@
             let tabOrder = 'random';
             let quizSequence = [];
             let currentSequenceIndex = -1;
+            
+            // --- SCORING AND COMBO STATE ---
+            let score = 0;
+            let comboCount = 0;
+            let comboMultiplier = 1;
+            let countrySelectedTimestamp = 0;
+            let comboTimerInterval = null;
+            const COMBO_DURATION = 5000; // 5 seconds for a combo
 
             // --- COUNTRY DATA, ALIASES, AND PATH ---
             const countryNameCorrections = { "Dem. Rep. Congo": "Democratic Republic of the Congo", "Central African Rep.": "Central African Republic", "Dominican Rep.": "Dominican Republic", "Eq. Guinea": "Equatorial Guinea", "Bosnia and Herz.": "Bosnia and Herzegovina", "S. Sudan": "South Sudan", "W. Sahara": "Western Sahara", "Solomon Is.": "Solomon Islands", "Antigua and Barb.": "Antigua and Barbuda", "St. Kitts and Nevis": "Saint Kitts and Nevis", "St. Lucia": "Saint Lucia", "St. Vin. and Gren.": "Saint Vincent and the Grenadines", "Swaziland": "Eswatini", "United Republic of Tanzania": "Tanzania", "Côte d'Ivoire": "Ivory Coast" };
@@ -150,6 +201,7 @@
             const finishAttemptBtn = document.getElementById('finish-attempt-btn');
             const scoreModal = document.getElementById('score-modal');
             const finalScoreDisplay = document.getElementById('final-score');
+            const finalTotalScoreDisplay = document.getElementById('final-total-score-display');
             const scoreDetailsDisplay = document.getElementById('score-details');
             const closeModalBtn = document.getElementById('close-modal-btn');
             const missesContainer = document.getElementById('misses-container');
@@ -162,6 +214,11 @@
             const tabOrderOptions = document.getElementById('tab-order-options');
             const startQuizBtn = document.getElementById('start-quiz-btn');
             const settingsPanel = document.getElementById('settings-panel');
+            const scoreDisplay = document.getElementById('score-display');
+            const pointsIndicator = document.getElementById('points-indicator');
+            const comboContainer = document.getElementById('combo-container');
+            const comboBar = document.getElementById('combo-bar');
+            const comboText = document.getElementById('combo-text');
 
             finishAttemptBtn.style.display = 'none';
 
@@ -290,6 +347,7 @@
                 guessInput.value = '';
                 guessInput.focus();
                 guessInput.placeholder = `Guess the selected country...`;
+                countrySelectedTimestamp = Date.now();
             }
 
             function smartFitBounds(layer) {
@@ -307,12 +365,8 @@
                     const size = latSpan * lngSpan;
 
                     let maxZoomLevel = 4;
-                    if (size < 50) {
-                        maxZoomLevel = 5;
-                    }
-                    if (size < 5) {
-                        maxZoomLevel = 6;
-                    }
+                    if (size < 50) maxZoomLevel = 5;
+                    if (size < 5) maxZoomLevel = 6;
                     
                     map.fitBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
                 }
@@ -332,10 +386,8 @@
                 finishQuiz('manual');
             }
 
-            // --- NEW: Function to select the previous country ---
             function selectPreviousCountry() {
                 for (let i = 0; i < quizSequence.length; i++) {
-                    // Decrement and wrap around if the index goes below 0
                     currentSequenceIndex = (currentSequenceIndex - 1 + quizSequence.length) % quizSequence.length;
                     const prevCountry = quizSequence[currentSequenceIndex];
                     
@@ -395,17 +447,106 @@
                     if (userAnswers[correctName]) return;
 
                     userAnswers[correctName] = true;
+                    if (tabOrder === 'random') {
+                        processCorrectGuessForCombo(guess, correctName);
+                    }
+                    
                     selectedCountryLayer.setStyle(guessedStyle());
                     getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(guessedStyle()));
                     finishAttemptBtn.disabled = false;
                     guessInput.value = '';
                     guessInput.placeholder = `Correct!`;
+                    
                     setTimeout(() => {
                         guessInput.placeholder = 'Type country name...';
                         selectNextCountry();
                     }, 500);
                 }
             });
+
+            // --- SCORING AND COMBO LOGIC ---
+            function processCorrectGuessForCombo(guess, correctName) {
+                clearInterval(comboTimerInterval);
+                comboCount++;
+                updateComboMeter();
+                handleScoring(guess, correctName);
+                startComboTimer();
+            }
+
+            function handleScoring(guess, correctName) {
+                const basePoints = 100;
+                const accuracyBonus = Math.max(0, (correctName.length - levenshtein(normalize(guess), normalize(correctName))) / correctName.length) * 50;
+                const timeTaken = (Date.now() - countrySelectedTimestamp) / 1000; // in seconds
+                const speedBonus = Math.max(0, 100 - (timeTaken * 5));
+                
+                const pointsGained = Math.round((basePoints + accuracyBonus + speedBonus) * comboMultiplier);
+                score += pointsGained;
+                
+                updateScoreDisplay();
+                showPointsIndicator(pointsGained);
+            }
+
+            function startComboTimer() {
+                comboBar.style.width = '100%';
+                const startTime = Date.now();
+                
+                comboTimerInterval = setInterval(() => {
+                    const elapsedTime = Date.now() - startTime;
+                    const remainingPercentage = Math.max(0, 100 - (elapsedTime / COMBO_DURATION) * 100);
+                    comboBar.style.width = remainingPercentage + '%';
+
+                    if (remainingPercentage <= 0) {
+                        clearInterval(comboTimerInterval);
+                        resetCombo();
+                    }
+                }, 50); // Update ~20 times per second
+            }
+
+            function resetCombo() {
+                comboCount = 0;
+                updateComboMeter();
+            }
+
+            function updateScoreDisplay() {
+                scoreDisplay.textContent = `Score: ${score}`;
+            }
+
+            function updateComboMeter() {
+                comboText.classList.remove('combo-heat-max');
+                comboBar.classList.remove('bg-blue-600', 'bg-amber-500', 'bg-red-600');
+
+                if (comboCount === 0) {
+                    comboText.textContent = '';
+                    comboMultiplier = 1;
+                    return;
+                }
+                
+                if (comboCount < 3) {
+                    comboText.textContent = `${'🔥'.repeat(comboCount)}`;
+                    comboMultiplier = 1;
+                    comboBar.classList.add('bg-blue-600');
+                } else {
+                    comboMultiplier = Math.min(8, 1 + (comboCount - 2)); // 2x at 3, 3x at 4, etc., max 8x
+                    comboText.textContent = `${comboCount}x COMBO`;
+                    if (comboMultiplier >= 8) {
+                        comboText.classList.add('combo-heat-max');
+                        comboBar.classList.add('bg-red-600');
+                    } else if (comboMultiplier >= 5) {
+                        comboBar.classList.add('bg-red-600');
+                    } else if (comboMultiplier >= 3) {
+                        comboBar.classList.add('bg-amber-500');
+                    }
+                }
+            }
+
+            function showPointsIndicator(points) {
+                pointsIndicator.textContent = `+${points}`;
+                pointsIndicator.style.backgroundColor = comboMultiplier > 1 ? '#ef4444' : '#22c55e';
+                pointsIndicator.classList.add('show');
+                setTimeout(() => {
+                    pointsIndicator.classList.remove('show');
+                }, 1000);
+            }
 
             // --- SETTINGS AND QUIZ LOGIC ---
             function handleSettingClick(e, container) {
@@ -439,25 +580,23 @@
                 finishAttemptBtn.disabled = true;
                 settingsPanel.classList.add('disabled');
                 
+                if (tabOrder === 'random') {
+                    scoreDisplay.classList.remove('hidden');
+                    comboContainer.classList.remove('hidden');
+                    comboText.classList.remove('hidden');
+                }
+                
                 quizSequence = [];
                 currentSequenceIndex = -1;
                 const countriesForQuiz = allCountries.slice();
 
                 switch(tabOrder) {
-                    case 'alphabetical':
-                        quizSequence = countriesForQuiz;
-                        break;
+                    case 'alphabetical': quizSequence = countriesForQuiz; break;
                     case 'path':
                         const addedCountries = new Set();
                         quizSequence = [];
                         countryPath.forEach(pathName => {
-                            const countriesToAdd = allCountries.filter(c => {
-                                if (c.normalized === pathName) return true;
-                                if (countryAliases[pathName] === c.normalized) return true;
-                                if (specialCases[pathName] && specialCases[pathName].includes(c.normalized)) return true;
-                                return false;
-                            });
-
+                            const countriesToAdd = allCountries.filter(c => c.normalized === pathName || countryAliases[pathName] === c.normalized || (specialCases[pathName] && specialCases[pathName].includes(c.normalized)));
                             countriesToAdd.forEach(country => {
                                 if (!addedCountries.has(country.name)) {
                                     quizSequence.push(country);
@@ -465,9 +604,7 @@
                                 }
                             });
                         });
-                        const countriesNotInPath = allCountries.filter(c => !addedCountries.has(c.name))
-                            .sort((a,b) => a.name.localeCompare(b.name));
-                        quizSequence.push(...countriesNotInPath);
+                        quizSequence.push(...allCountries.filter(c => !addedCountries.has(c.name)).sort((a,b) => a.name.localeCompare(b.name)));
                         break;
                     case 'random':
                     default:
@@ -488,7 +625,8 @@
             function finishQuiz(reason) {
                 quizState = 'finished';
                 stopTimer();
-                let score = Object.keys(userAnswers).length;
+                clearInterval(comboTimerInterval);
+                let correctCount = Object.keys(userAnswers).length;
                 let missesHTML = '';
                 
                 allCountries.forEach(country => {
@@ -500,10 +638,16 @@
                 if(missesHTML === '') missesHTML = `<p class="text-green-700">Perfect score!</p>`;
 
                 scoreTitle.textContent = reason === 'time' ? "Time's Up!" : "Your Score";
-                finalScoreDisplay.textContent = `${score}/${allCountries.length}`;
-                scoreDetailsDisplay.textContent = `You correctly identified ${score} out of ${allCountries.length} countries.`;
+                finalScoreDisplay.textContent = `${correctCount}/${allCountries.length}`;
+                scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
                 missesContainer.innerHTML = missesHTML;
                 
+                if (tabOrder === 'random') {
+                    finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
+                } else {
+                    finalTotalScoreDisplay.textContent = '';
+                }
+
                 scoreModal.classList.remove('hidden');
                 scoreModal.classList.add('flex');
                 setTimeout(() => scoreModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50);
@@ -530,6 +674,9 @@
                 finishAttemptBtn.classList.add('hidden');
                 backToQuizBtn.classList.remove('hidden');
                 subtitle.textContent = "Here's a review of your answers.";
+                scoreDisplay.classList.add('hidden');
+                comboContainer.classList.add('hidden');
+                comboText.classList.add('hidden');
                 
                 tooltipLayerGroup.clearLayers();
                 
@@ -558,6 +705,9 @@
                 finishAttemptBtn.style.display = 'none';
                 backToQuizBtn.classList.add('hidden');
                 subtitle.textContent = "Configure your settings and press Start!";
+                scoreDisplay.classList.add('hidden');
+                comboContainer.classList.add('hidden');
+                comboText.classList.add('hidden');
                 
                 tooltipLayerGroup.clearLayers();
                 
@@ -571,10 +721,17 @@
                 selectedCountryLayer = null;
                 guessInput.value = '';
                 guessInput.placeholder = 'Type country name...';
+                
+                // Reset score and combo
+                score = 0;
+                updateScoreDisplay();
+                clearInterval(comboTimerInterval);
+                comboBar.style.width = '0%';
+                resetCombo();
+
                 resetTimer();
             }
             
-            // --- MODIFIED: Handle Shift+Tab for previous country ---
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Tab' && quizState === 'playing') {
                     e.preventDefault();
