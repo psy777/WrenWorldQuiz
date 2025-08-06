@@ -220,7 +220,8 @@
             // --- TIMER STATE ---
             let quizStartTime = 0;
             let zenTimeElapsed = 0;
-            
+            let timeRemaining;
+
             // --- MIRROR MODE STATE ---
             let mirrorTries = 4;
 
@@ -239,7 +240,7 @@
             };
             const specialCases = { 'congo': ['democraticrepublicofthecongo', 'republicofthecongo'] };
 
-            const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paraguay uruguay argentina chile falklandislands Iceland Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar fsal japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman bae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
+            const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paray uruguay argentina chile falklandislands Iceland Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar fsal japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman bae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
 
             // --- DOM ELEMENTS ---
             const guessInput = document.getElementById('country-guess-input');
@@ -559,6 +560,10 @@
                 if (clickedName === correctName) {
                     // Correct Guess
                     userAnswers[correctName] = true;
+                    if (playStyle === 'timed') {
+                        timeRemaining += 2;
+                        updateTimerDisplay();
+                    }
                     if (playStyle === 'sprint') processCorrectGuessForCombo(clickedName, correctName);
                     
                     let styleKey;
@@ -583,14 +588,20 @@
                     // Incorrect Guess
                     mirrorTries--;
                     if (mirrorTries <= 0) {
-                        // Mark the prompted country as missed
-                        const missedLayer = countryData[correctName];
-                        if (missedLayer) {
-                            missedLayer.setStyle(getStyle('incorrectFinished'));
+                        // Out of tries: Reveal the correct answer and move on.
+                        const correctLayer = countryData[correctName];
+                        if (correctLayer) {
+                            smartFitBounds(correctLayer);
+                            correctLayer.setStyle(getStyle('incorrectFinished'));
                         }
-                        // Move to the next one
-                        if (playStyle === 'paced') startPacedTimer(true); // Reset and move to next
-                        else promptNextMirrorCountry();
+                        
+                        setTimeout(() => {
+                            if (playStyle === 'paced') {
+                                startPacedTimer(true);
+                            } else {
+                                promptNextMirrorCountry();
+                            }
+                        }, 1500); // Wait 1.5 seconds to show the user the correct country
                     }
                 }
             }
@@ -1176,7 +1187,6 @@
             });
 
             // --- TIMER LOGIC ---
-            let timeRemaining;
             let pacedTimeRemaining;
 
             function startTimer() {
@@ -1291,7 +1301,7 @@
                         <p><strong>Normal:</strong> Shows the first letter and underscores for the rest of the word.</p>
                         <p><strong>Hard:</strong> Shows only underscores representing the number of letters.</p>
                         <p><strong>Extreme:</strong> No hints are provided.</p>
-                        <p><strong>Mirror:</strong> Click the prompted country on the map. You have 4 incorrect clicks per country.</p>`
+                        <p><strong>Mirror:</strong> Click the prompted country on the map. You have 4 incorrect clicks per country. Get a country right in Timed mode to add 2 seconds to the clock.</p>`
                 },
                 theme: {
                     title: 'Theme',
