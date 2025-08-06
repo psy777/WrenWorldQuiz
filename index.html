@@ -158,7 +158,8 @@
         <div id="score-modal-content" class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
             <h2 class="text-4xl font-bold text-blue-900 mb-4" id="score-title">Your Score</h2>
             <p class="text-8xl font-bold text-green-500 mb-2" id="final-score"></p>
-            <p class="text-2xl font-semibold text-gray-700 mb-4" id="final-total-score-display"></p>
+            <p class="text-2xl font-semibold text-gray-700 mb-2" id="final-total-score-display"></p>
+            <p class="text-lg text-gray-500 mb-4" id="final-time-display"></p>
             <p class="text-lg text-gray-600 mb-6" id="score-details"></p>
             <div id="results-list" class="text-left max-h-60 overflow-y-auto mb-6 border border-gray-200 rounded-lg p-4">
                 <h3 class="font-bold text-lg mb-2 text-red-700">Missed Answers:</h3>
@@ -211,6 +212,10 @@
             const COMBO_DURATION = 5000; // 5 seconds for a combo in Sprint mode
             const PACED_DURATION = 15; // 15 seconds per country in Paced mode
 
+            // --- TIMER STATE ---
+            let quizStartTime = 0;
+            let zenTimeElapsed = 0;
+
             // --- COUNTRY DATA, ALIASES, AND PATH ---
             const countryNameCorrections = { "Dem. Rep. Congo": "Democratic Republic of the Congo", "Central African Rep.": "Central African Republic", "Dominican Rep.": "Dominican Republic", "Eq. Guinea": "Equatorial Guinea", "Bosnia and Herz.": "Bosnia and Herzegovina", "S. Sudan": "South Sudan", "W. Sahara": "Western Sahara", "Solomon Is.": "Solomon Islands", "Antigua and Barb.": "Antigua and Barbuda", "St. Kitts and Nevis": "Saint Kitts and Nevis", "St. Lucia": "Saint Lucia", "St. Vin. and Gren.": "Saint Vincent and the Grenadines", "Swaziland": "Eswatini", "United Republic of Tanzania": "Tanzania", "Côte d'Ivoire": "Ivory Coast" };
             const countryBundles = { "Greenland": "Denmark", "Western Sahara": "Morocco", "Somaliland": "Somalia", "Northern Cyprus": "Cyprus", "West Bank": "Israel", "Puerto Rico": "United States of America", "French Guiana": "France", "Democratic Republic of the Congo": "Republic of the Congo", "Bermuda": "United States of America"};
@@ -234,6 +239,7 @@
             const scoreModal = document.getElementById('score-modal');
             const finalScoreDisplay = document.getElementById('final-score');
             const finalTotalScoreDisplay = document.getElementById('final-total-score-display');
+            const finalTimeDisplay = document.getElementById('final-time-display');
             const scoreDetailsDisplay = document.getElementById('score-details');
             const closeModalBtn = document.getElementById('close-modal-btn');
             const missesContainer = document.getElementById('misses-container');
@@ -261,6 +267,19 @@
             // --- SVG TIMER SETUP ---
             let progressBarLength; 
             finishAttemptBtn.style.display = 'none';
+            
+            // --- BIOME DATA ---
+            const countryBiomes = {
+                'egypt': 'desert', 'libya': 'desert', 'algeria': 'desert', 'niger': 'desert', 'mali': 'desert', 'mauritania': 'desert', 'chad': 'desert', 'sudan': 'desert', 'saudiarabia': 'desert', 'yemen': 'desert', 'oman': 'desert', 'unitedarabemirates': 'desert', 'qatar': 'desert', 'kuwait': 'desert', 'jordan': 'desert', 'iraq': 'desert', 'iran': 'desert', 'afghanistan': 'desert', 'pakistan': 'desert', 'australia': 'desert', 'namibia': 'desert', 'botswana': 'desert', 'westernsahara': 'desert', 'turkmenistan': 'desert', 'uzbekistan': 'desert',
+                'brazil': 'rainforest', 'colombia': 'rainforest', 'peru': 'rainforest', 'ecuador': 'rainforest', 'bolivia': 'rainforest', 'venezuela': 'rainforest', 'guyana': 'rainforest', 'suriname': 'rainforest', 'frenchguiana': 'rainforest', 'panama': 'rainforest', 'costarica': 'rainforest', 'nicaragua': 'rainforest', 'honduras': 'rainforest', 'guatemala': 'rainforest', 'belize': 'rainforest', 'democraticrepublicofthecongo': 'rainforest', 'republicofthecongo': 'rainforest', 'gabon': 'rainforest', 'equatorialguinea': 'rainforest', 'cameroon': 'rainforest', 'centralafricanrepublic': 'rainforest', 'indonesia': 'rainforest', 'malaysia': 'rainforest', 'papuanewguinea': 'rainforest', 'philippines': 'rainforest', 'thailand': 'rainforest', 'vietnam': 'rainforest', 'laos': 'rainforest', 'cambodia': 'rainforest', 'srilanka': 'rainforest', 'madagascar': 'rainforest', 'ivorycoast': 'rainforest', 'ghana': 'rainforest', 'nigeria': 'rainforest',
+                'canada': 'forest', 'russia': 'forest', 'finland': 'forest', 'sweden': 'forest', 'norway': 'forest', 'japan': 'forest',
+                'unitedstatesofamerica': 'temperate', 'mexico': 'temperate', 'china': 'temperate', 'india': 'temperate', 'argentina': 'temperate', 'chile': 'temperate', 'southafrica': 'temperate', 'newzealand': 'temperate', 'unitedkingdom': 'temperate', 'ireland': 'temperate', 'france': 'temperate', 'germany': 'temperate', 'poland': 'temperate', 'spain': 'temperate', 'portugal': 'temperate', 'italy': 'temperate', 'greece': 'temperate', 'turkey': 'temperate', 'ukraine': 'temperate', 'romania': 'temperate', 'southkorea': 'temperate', 'northkorea': 'temperate', 'uruguay': 'temperate', 'paraguay': 'temperate', 'hungary': 'temperate', 'austria': 'temperate', 'switzerland': 'temperate', 'belgium': 'temperate', 'netherlands': 'temperate', 'denmark': 'temperate', 'czechrepublic': 'temperate', 'slovakia': 'temperate',
+                'iceland': 'tundra', 'greenland': 'tundra'
+            };
+
+            function getCountryBiome(countryName) {
+                return countryBiomes[normalize(countryName)] || 'temperate';
+            }
 
             // --- THEME DATA ---
             const themes = {
@@ -283,26 +302,36 @@
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                     mapBg: '#111827',
                     styles: {
-                        default: { fillColor: '#4f46e5', weight: 1, color: '#a5b4fc', fillOpacity: 0.7 },
+                        default: { fillColor: '#6366f1', weight: 1, color: '#a5b4fc', fillOpacity: 0.7 },
                         guessed: { fillColor: '#16a34a', weight: 1, color: '#86efac', fillOpacity: 0.8 },
                         selected: { weight: 4, color: '#f97316', fillColor: '#fdba74' },
                         correctFinished: { fillColor: '#16a34a', weight: 1, color: 'white', fillOpacity: 0.9 },
                         incorrectFinished: { fillColor: '#dc2626', weight: 1, color: 'white', fillOpacity: 0.9 },
                         unclickable: { fillColor: '#374151', weight: 1, color: '#6b7280', fillOpacity: 0.5 },
                     },
-                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-300", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
+                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-400", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
                 },
                 earth: {
-                    url: 'https://stamen-tiles-{s}.a.ssl.fastly.net/terrain-background/{z}/{x}/{y}{r}.png',
-                    attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.',
-                    mapBg: '#c4a686',
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#a2d2ff',
                     styles: {
-                        default: { fillColor: '#854d0e', weight: 1, color: '#422006', fillOpacity: 0.6 },
-                        guessed: { fillColor: '#15803d', weight: 1, color: '#052e16', fillOpacity: 0.7 },
+                        default: { fillColor: '#a16207', weight: 1, color: '#422006', fillOpacity: 0.7 },
                         selected: { weight: 4, color: '#ca8a04', fillColor: '#fef08a' },
-                        correctFinished: { fillColor: '#15803d', weight: 1, color: 'white', fillOpacity: 0.9 },
                         incorrectFinished: { fillColor: '#b91c1c', weight: 1, color: 'white', fillOpacity: 0.9 },
                         unclickable: { fillColor: '#d6d3d1', weight: 1, color: '#a8a29e', fillOpacity: 0.5 },
+                        
+                        guessed_desert: { fillColor: '#f4a460', weight: 1, color: '#8b4513', fillOpacity: 0.8 }, // Sandy Brown
+                        guessed_rainforest: { fillColor: '#2e8b57', weight: 1, color: '#006400', fillOpacity: 0.8 }, // Sea Green
+                        guessed_forest: { fillColor: '#228b22', weight: 1, color: '#006400', fillOpacity: 0.8 }, // Forest Green
+                        guessed_temperate: { fillColor: '#6b8e23', weight: 1, color: '#556b2f', fillOpacity: 0.8 }, // Olive Drab
+                        guessed_tundra: { fillColor: '#add8e6', weight: 1, color: '#4682b4', fillOpacity: 0.8 }, // Light Blue
+                        
+                        correctFinished_desert: { fillColor: '#f4a460', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_rainforest: { fillColor: '#2e8b57', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_forest: { fillColor: '#228b22', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_temperate: { fillColor: '#6b8e23', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_tundra: { fillColor: '#add8e6', weight: 1, color: 'black', fillOpacity: 0.7 },
                     },
                     classes: { body: "bg-stone-300", container: "bg-stone-100", title: "text-yellow-900", settings: "bg-stone-200", settingTitle: "text-stone-700", settingRail: "bg-stone-300", settingInactive: "text-stone-500", settingActive: "bg-stone-50 text-stone-800 shadow" }
                 },
@@ -311,14 +340,14 @@
                     attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
                     mapBg: '#005f73',
                     styles: {
-                        default: { fillColor: '#0a9396', weight: 1, color: '#e9d8a6', fillOpacity: 0.7 },
+                        default: { fillColor: '#2a9d8f', weight: 1, color: '#e9d8a6', fillOpacity: 0.7 },
                         guessed: { fillColor: '#94d2bd', weight: 1, color: '#e9d8a6', fillOpacity: 0.8 },
                         selected: { weight: 4, color: '#ee9b00', fillColor: '#fefae0' },
                         correctFinished: { fillColor: '#94d2bd', weight: 1, color: 'black', fillOpacity: 0.9 },
                         incorrectFinished: { fillColor: '#ae2012', weight: 1, color: 'white', fillOpacity: 0.9 },
                         unclickable: { fillColor: '#bbdef0', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
                     },
-                     classes: { body: "bg-cyan-100", container: "bg-cyan-50", title: "text-cyan-900", settings: "bg-cyan-100", settingTitle: "text-cyan-800", settingRail: "bg-cyan-200", settingInactive: "text-cyan-600", settingActive: "bg-white text-orange-600 shadow" }
+                     classes: { body: "bg-cyan-100", container: "bg-cyan-50", title: "text-cyan-900", settings: "bg-cyan-100", settingTitle: "text-cyan-800", settingRail: "bg-cyan-200", settingInactive: "text-cyan-700", settingActive: "bg-white text-orange-600 shadow" }
                 }
             };
             
@@ -397,18 +426,35 @@
                 if (geoJsonLayer) {
                     geoJsonLayer.eachLayer(layer => {
                         const name = layer.feature.properties.name;
+                        let styleKey;
+
                         if (quizState === 'finished') {
-                           let isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
-                           layer.setStyle(isGuessed ? themes[theme].styles.correctFinished : themes[theme].styles.incorrectFinished);
+                            const isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
+                            if (isGuessed) {
+                                if (theme === 'earth') {
+                                    const biome = getCountryBiome(name);
+                                    styleKey = `correctFinished_${biome}`;
+                                } else {
+                                    styleKey = 'correctFinished';
+                                }
+                            } else {
+                                styleKey = 'incorrectFinished';
+                            }
                         } else if (layer === selectedCountryLayer) {
-                            layer.setStyle(themes[theme].styles.selected);
+                            styleKey = 'selected';
                         } else if (userAnswers[name]) {
-                            layer.setStyle(themes[theme].styles.guessed);
+                             if (theme === 'earth') {
+                                const biome = getCountryBiome(name);
+                                styleKey = `guessed_${biome}`;
+                            } else {
+                                styleKey = 'guessed';
+                            }
                         } else if (name === 'Antarctica') {
-                             layer.setStyle(themes[theme].styles.unclickable);
+                            styleKey = 'unclickable';
                         } else {
-                            layer.setStyle(themes[theme].styles.default);
+                            styleKey = 'default';
                         }
+                        layer.setStyle(getStyle(styleKey));
                     });
                 }
             }
@@ -458,7 +504,15 @@
             }
 
             // --- STYLING FUNCTIONS ---
-            function getStyle(styleName) { return themes[theme].styles[styleName]; }
+            function getStyle(styleName) { 
+                const style = themes[theme].styles[styleName];
+                // Fallback for biome styles if one doesn't exist
+                if (!style && styleName.includes('_')) {
+                    const baseStyle = styleName.split('_')[0];
+                    return themes[theme].styles[`${baseStyle}_temperate`] || themes[theme].styles['guessed'];
+                }
+                return style;
+            }
 
             // --- MAP INTERACTION LOGIC ---
             function getMainLayer(layer) {
@@ -499,8 +553,22 @@
 
             function resetHighlight(layer) {
                 if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
-                layer.setStyle(getStyle('default'));
-                getRelatedLayers(layer).forEach(l => l.setStyle(getStyle('default')));
+                
+                let styleKey;
+                const name = layer.feature.properties.name;
+                if (userAnswers[name]) {
+                    if (theme === 'earth') {
+                        const biome = getCountryBiome(name);
+                        styleKey = `guessed_${biome}`;
+                    } else {
+                        styleKey = 'guessed';
+                    }
+                } else {
+                    styleKey = 'default';
+                }
+                const style = getStyle(styleKey);
+                layer.setStyle(style);
+                getRelatedLayers(layer).forEach(l => l.setStyle(style));
             }
             
             function selectCountry(layer) {
@@ -508,8 +576,7 @@
                 clearInterval(hintRevealInterval);
 
                 if (selectedCountryLayer && !userAnswers[selectedCountryLayer.feature.properties.name]) {
-                    selectedCountryLayer.setStyle(getStyle('default'));
-                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('default')));
+                    resetHighlight(selectedCountryLayer);
                 }
                 selectedCountryLayer = layer;
                 selectedCountryLayer.setStyle(getStyle('selected'));
@@ -658,8 +725,17 @@
                     userAnswers[correctName] = true;
                     if (playStyle === 'sprint') processCorrectGuessForCombo(guess, correctName);
                     
-                    selectedCountryLayer.setStyle(getStyle('guessed'));
-                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('guessed')));
+                    let styleKey;
+                    if (theme === 'earth') {
+                        const biome = getCountryBiome(correctName);
+                        styleKey = `guessed_${biome}`;
+                    } else {
+                        styleKey = 'guessed';
+                    }
+                    const style = getStyle(styleKey);
+                    selectedCountryLayer.setStyle(style);
+                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(style));
+
                     finishAttemptBtn.disabled = false;
                     guessInput.value = '';
                     guessInput.placeholder = `Correct!`;
@@ -778,6 +854,7 @@
                 finishAttemptBtn.disabled = true;
                 settingsPanel.classList.add('disabled');
                 statusDisplayContainer.classList.remove('hidden');
+                quizStartTime = Date.now();
 
                 if (!progressBarLength) {
                     progressBarLength = timerProgressBar.getTotalLength();
@@ -817,7 +894,7 @@
                         break;
                 }
 
-                if (playStyle === 'timed') startTimer();
+                if (playStyle === 'timed' || playStyle === 'zen') startTimer();
                 updateTimerDisplay();
                 selectNextCountry();
             }
@@ -826,6 +903,7 @@
             
             function finishQuiz(reason) {
                 quizState = 'finished';
+                const timeSpent = Math.round((Date.now() - quizStartTime) / 1000);
                 stopAllTimers();
                 
                 let correctCount = Object.keys(userAnswers).length;
@@ -844,8 +922,17 @@
                 scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
                 missesContainer.innerHTML = missesHTML;
                 
-                if (playStyle === 'sprint') finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
-                else finalTotalScoreDisplay.textContent = '';
+                const finalTime = (playStyle === 'zen') ? zenTimeElapsed : timeSpent;
+                const minutes = Math.floor(finalTime / 60);
+                const seconds = finalTime % 60;
+                finalTimeDisplay.textContent = `Total Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                if (playStyle === 'sprint') {
+                    finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
+                    finalTotalScoreDisplay.classList.remove('hidden');
+                } else {
+                    finalTotalScoreDisplay.classList.add('hidden');
+                }
 
                 scoreModal.classList.remove('hidden');
                 scoreModal.classList.add('flex');
@@ -883,8 +970,20 @@
                     const countryName = layer.feature.properties.name;
                     if (countryName === 'Antarctica') return;
                     layer.unbindTooltip();
-                    let isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
-                    layer.setStyle(isGuessed ? getStyle('correctFinished') : getStyle('incorrectFinished'));
+                    
+                    let styleKey;
+                    const isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
+                    if (isGuessed) {
+                        if (theme === 'earth') {
+                            const biome = getCountryBiome(countryName);
+                            styleKey = `correctFinished_${biome}`;
+                        } else {
+                            styleKey = 'correctFinished';
+                        }
+                    } else {
+                        styleKey = 'incorrectFinished';
+                    }
+                    layer.setStyle(getStyle(styleKey));
                     
                     const center = getVisualCenter(layer);
                     L.marker(center, { opacity: 0 })
@@ -919,6 +1018,8 @@
                 guessInput.value = '';
                 guessInput.placeholder = 'Type country name...';
                 score = 0;
+                quizStartTime = 0;
+                zenTimeElapsed = 0;
                 updateScoreDisplay();
                 stopAllTimers();
                 resetCombo();
@@ -940,17 +1041,25 @@
             let pacedTimeRemaining;
 
             function startTimer() {
-                timeRemaining = 15 * 60;
+                if (playStyle === 'timed') {
+                    timeRemaining = 15 * 60;
+                    timerInterval = setInterval(() => {
+                        timeRemaining--;
+                        updateTimerDisplay();
+                        if (timeRemaining <= 0) finishQuiz('time');
+                    }, 1000);
+                } else if (playStyle === 'zen') {
+                    zenTimeElapsed = 0;
+                     timerInterval = setInterval(() => {
+                        zenTimeElapsed++;
+                        updateTimerDisplay();
+                    }, 1000);
+                }
                 updateTimerDisplay();
-                timerInterval = setInterval(() => {
-                    timeRemaining--;
-                    updateTimerDisplay();
-                    if (timeRemaining <= 0) finishQuiz('time');
-                }, 1000);
             }
 
             function startPacedTimer() {
-                stopAllTimers();
+                stopAllTimers(); // Stop other timers like the main one if it exists
                 pacedTimeRemaining = PACED_DURATION;
                 updateTimerDisplay();
                 timerInterval = setInterval(() => {
@@ -967,14 +1076,19 @@
                 statusDisplayContainer.classList.remove('hidden');
                 timerProgressBar.style.display = 'none';
                 
+                let minutes, seconds;
+
                 switch(playStyle) {
                     case 'zen':
-                        statusDisplayContainer.classList.add('hidden');
+                        if (quizState === 'pre-start') zenTimeElapsed = 0;
+                        minutes = Math.floor(zenTimeElapsed / 60);
+                        seconds = zenTimeElapsed % 60;
+                        timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
                         break;
                     case 'timed':
                         if (quizState === 'pre-start') timeRemaining = 15 * 60;
-                        const minutes = Math.floor(timeRemaining / 60);
-                        const seconds = timeRemaining % 60;
+                        minutes = Math.floor(timeRemaining / 60);
+                        seconds = timeRemaining % 60;
                         timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
                         break;
                     case 'paced':
@@ -1005,7 +1119,7 @@
                 playStyle: {
                     title: 'Play Style',
                     content: `
-                        <p><strong>Zen:</strong> No time limits. Play at your own pace.</p>
+                        <p><strong>Zen:</strong> No time limits. A timer will count up to track your time.</p>
                         <p><strong>Timed:</strong> A 15-minute timer for the entire quiz.</p>
                         <p><strong>Paced:</strong> 15 seconds to guess each country.</p>
                         <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.`
