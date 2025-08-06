@@ -28,7 +28,7 @@
             color: #1e3a8a;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-        #settings-panel.disabled {
+        #settings-panel.disabled, .setting-control button.disabled {
             opacity: 0.6;
             pointer-events: none;
         }
@@ -60,6 +60,10 @@
         }
         .setting-control button {
             transition: all 0.2s ease-in-out;
+        }
+        #country-guess-input:read-only {
+            background-color: #e9ecef;
+            cursor: default;
         }
     </style>
 </head>
@@ -133,6 +137,7 @@
                     <button data-value="normal" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Normal</button>
                     <button data-value="hard" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Hard</button>
                     <button data-value="extreme" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Extreme</button>
+                    <button data-value="mirror" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Mirror</button>
                 </div>
             </div>
              <div class="space-y-2">
@@ -198,7 +203,7 @@
             let quizState = 'pre-start'; // 'pre-start', 'playing', 'finished'
             let playStyle = 'timed'; // 'zen', 'timed', 'paced', 'sprint'
             let tabOrder = 'random';
-            let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme'
+            let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme', 'mirror'
             let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'oceanic'
             let quizSequence = [];
             let currentSequenceIndex = -1;
@@ -215,6 +220,9 @@
             // --- TIMER STATE ---
             let quizStartTime = 0;
             let zenTimeElapsed = 0;
+            
+            // --- MIRROR MODE STATE ---
+            let mirrorTries = 4;
 
             // --- COUNTRY DATA, ALIASES, AND PATH ---
             const countryNameCorrections = { "Dem. Rep. Congo": "Democratic Republic of the Congo", "Central African Rep.": "Central African Republic", "Dominican Rep.": "Dominican Republic", "Eq. Guinea": "Equatorial Guinea", "Bosnia and Herz.": "Bosnia and Herzegovina", "S. Sudan": "South Sudan", "W. Sahara": "Western Sahara", "Solomon Is.": "Solomon Islands", "Antigua and Barb.": "Antigua and Barbuda", "St. Kitts and Nevis": "Saint Kitts and Nevis", "St. Lucia": "Saint Lucia", "St. Vin. and Gren.": "Saint Vincent and the Grenadines", "Swaziland": "Eswatini", "United Republic of Tanzania": "Tanzania", "Côte d'Ivoire": "Ivory Coast" };
@@ -262,7 +270,6 @@
             const infoModalTitle = document.getElementById('info-modal-title');
             const infoModalBody = document.getElementById('info-modal-body');
             const closeInfoModalBtn = document.getElementById('close-info-modal-btn');
-
 
             // --- SVG TIMER SETUP ---
             let progressBarLength; 
@@ -440,7 +447,7 @@
                             } else {
                                 styleKey = 'incorrectFinished';
                             }
-                        } else if (layer === selectedCountryLayer) {
+                        } else if (layer === selectedCountryLayer && difficulty !== 'mirror') {
                             styleKey = 'selected';
                         } else if (userAnswers[name]) {
                              if (theme === 'earth') {
@@ -529,12 +536,65 @@
                     return;
                 }
                 layer.on({
-                    mouseover: e => { if (quizState === 'playing') highlightFeature(getMainLayer(e.target)); },
-                    mouseout: e => { if (quizState === 'playing') resetHighlight(getMainLayer(e.target)); },
-                    click: e => { if (quizState === 'playing') selectCountry(getMainLayer(e.target)); }
+                    mouseover: e => { if (quizState === 'playing' && difficulty !== 'mirror') highlightFeature(getMainLayer(e.target)); },
+                    mouseout: e => { if (quizState === 'playing' && difficulty !== 'mirror') resetHighlight(getMainLayer(e.target)); },
+                    click: e => {
+                        if (quizState !== 'playing') return;
+                        const mainLayer = getMainLayer(e.target);
+                        if (difficulty === 'mirror') {
+                            handleMirrorModeClick(mainLayer);
+                        } else {
+                            selectCountry(mainLayer);
+                        }
+                    }
                 });
             }
             
+            function handleMirrorModeClick(clickedLayer) {
+                const clickedName = clickedLayer.feature.properties.name;
+                if (userAnswers[clickedName]) return; 
+
+                const correctName = quizSequence[currentSequenceIndex].name;
+
+                if (clickedName === correctName) {
+                    // Correct Guess
+                    userAnswers[correctName] = true;
+                    if (playStyle === 'sprint') processCorrectGuessForCombo(clickedName, correctName);
+                    
+                    let styleKey;
+                    if (theme === 'earth') {
+                        const biome = getCountryBiome(clickedName);
+                        styleKey = `guessed_${biome}`;
+                    } else {
+                        styleKey = 'guessed';
+                    }
+                    const style = getStyle(styleKey);
+                    clickedLayer.setStyle(style);
+                    getRelatedLayers(clickedLayer).forEach(l => l.setStyle(style));
+                    
+                    const allGuessed = Object.keys(userAnswers).length === allCountries.length;
+                    if (allGuessed) {
+                        finishQuiz('manual');
+                    } else {
+                        if (playStyle === 'paced') startPacedTimer(true); // Reset and move to next
+                        else promptNextMirrorCountry();
+                    }
+                } else {
+                    // Incorrect Guess
+                    mirrorTries--;
+                    if (mirrorTries <= 0) {
+                        // Mark the prompted country as missed
+                        const missedLayer = countryData[correctName];
+                        if (missedLayer) {
+                            missedLayer.setStyle(getStyle('incorrectFinished'));
+                        }
+                        // Move to the next one
+                        if (playStyle === 'paced') startPacedTimer(true); // Reset and move to next
+                        else promptNextMirrorCountry();
+                    }
+                }
+            }
+
             function getRelatedLayers(layer) {
                 const name = layer.feature.properties.name;
                 const related = [];
@@ -661,6 +721,20 @@
                 }
                 finishQuiz('manual');
             }
+            
+            function promptNextMirrorCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex + 1) % quizSequence.length;
+                    const nextCountry = quizSequence[currentSequenceIndex];
+                    if (!userAnswers[nextCountry.name] && (!countryData[nextCountry.name].options || countryData[nextCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
+                        guessInput.value = `Click on: ${nextCountry.name}`;
+                        mirrorTries = 4;
+                        countrySelectedTimestamp = Date.now();
+                        return;
+                    }
+                }
+                finishQuiz('manual'); // All countries are either guessed or missed
+            }
 
             function selectPreviousCountry() {
                 for (let i = 0; i < quizSequence.length; i++) {
@@ -714,7 +788,7 @@
             }
 
             guessInput.addEventListener('input', () => {
-                if (!selectedCountryLayer) return;
+                if (difficulty === 'mirror' || !selectedCountryLayer) return;
                 const guess = guessInput.value;
                 const correctName = selectedCountryLayer.feature.properties.name;
                 
@@ -741,7 +815,8 @@
                     guessInput.placeholder = `Correct!`;
                     
                     setTimeout(() => {
-                        selectNextCountry();
+                        if (playStyle === 'paced') startPacedTimer(true);
+                        else selectNextCountry();
                     }, 500);
                 }
             });
@@ -757,7 +832,10 @@
 
             function handleScoring(guess, correctName) {
                 const basePoints = 100;
-                const accuracyBonus = Math.max(0, (correctName.length - levenshtein(normalize(guess), normalize(correctName))) / correctName.length) * 50;
+                let accuracyBonus = 50;
+                if (difficulty !== 'mirror') {
+                    accuracyBonus = Math.max(0, (correctName.length - levenshtein(normalize(guess), normalize(correctName))) / correctName.length) * 50;
+                }
                 const timeTaken = (Date.now() - countrySelectedTimestamp) / 1000;
                 const speedBonus = Math.max(0, 100 - (timeTaken * 5));
                 
@@ -811,16 +889,16 @@
             }
 
             // --- SETTINGS AND QUIZ LOGIC ---
-            function handleSettingClick(e) {
+            function handleSettingClick(e, containerId) {
                 const button = e.target.closest('button');
                 if (!button) return null;
-                const container = button.parentElement;
+                const container = document.getElementById(containerId);
 
-                const currentActive = container.querySelector('.active');
-                if(currentActive) {
-                    currentActive.classList.remove('active', ...themes[theme].classes.settingActive.split(' '));
-                    currentActive.classList.add(...themes[theme].classes.settingInactive.split(' '));
-                }
+                container.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('active', ...themes[theme].classes.settingActive.split(' '));
+                    btn.classList.add(...themes[theme].classes.settingInactive.split(' '));
+                });
+                
                 button.classList.add('active', ...themes[theme].classes.settingActive.split(' '));
                 button.classList.remove(...themes[theme].classes.settingInactive.split(' '));
 
@@ -828,32 +906,55 @@
             }
 
             playStyleOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e);
+                const value = handleSettingClick(e, 'play-style-options');
                 if (value) { playStyle = value; updateTimerDisplay(); }
             });
             tabOrderOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e);
+                const value = handleSettingClick(e, 'tab-order-options');
                 if (value) tabOrder = value;
             });
             difficultyOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e);
-                if (value) difficulty = value;
+                const value = handleSettingClick(e, 'difficulty-options');
+                if (value) {
+                    difficulty = value;
+                    const pathButton = tabOrderOptions.querySelector('button[data-value="path"]');
+                    if (difficulty === 'mirror') {
+                        pathButton.classList.add('disabled');
+                        if (tabOrder === 'path') {
+                            tabOrder = 'random';
+                            // Visually update the tab order buttons
+                            const randomButton = tabOrderOptions.querySelector('button[data-value="random"]');
+                            handleSettingClick({ target: randomButton }, 'tab-order-options');
+                        }
+                    } else {
+                        pathButton.classList.remove('disabled');
+                    }
+                }
             });
             themeOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e);
+                const value = handleSettingClick(e, 'theme-options');
                 if(value) applyTheme(value);
             });
 
 
             function startQuiz() {
                 quizState = 'playing';
-                subtitle.textContent = "Click a country or press Tab for a new one!";
                 startQuizBtn.classList.add('hidden');
-                guessInput.classList.remove('hidden');
-                finishAttemptBtn.style.display = 'inline-block';
-                finishAttemptBtn.disabled = true;
                 settingsPanel.classList.add('disabled');
-                statusDisplayContainer.classList.remove('hidden');
+                finishAttemptBtn.style.display = 'inline-block';
+                finishAttemptBtn.disabled = false;
+                guessInput.classList.remove('hidden');
+                
+                if (difficulty === 'mirror') {
+                    subtitle.textContent = "Click the prompted country on the map.";
+                    guessInput.readOnly = true;
+                } else {
+                    subtitle.textContent = "Click a country or press Tab for a new one!";
+                    guessInput.readOnly = false;
+                    guessInput.placeholder = 'Type country name...';
+                    finishAttemptBtn.disabled = true; // Only enable after first correct guess
+                }
+                
                 quizStartTime = Date.now();
 
                 if (!progressBarLength) {
@@ -871,6 +972,7 @@
                 switch(tabOrder) {
                     case 'alphabetical': quizSequence = countriesForQuiz; break;
                     case 'path':
+                        if (difficulty === 'mirror') break; // Should be disabled, but as a safeguard
                         const addedCountries = new Set();
                         quizSequence = [];
                         countryPath.forEach(pathName => {
@@ -893,10 +995,18 @@
                         quizSequence = countriesForQuiz;
                         break;
                 }
-
+                
+                statusDisplayContainer.classList.remove('hidden');
                 if (playStyle === 'timed' || playStyle === 'zen') startTimer();
+                
+                if (difficulty === 'mirror') {
+                    if (playStyle === 'paced') startPacedTimer();
+                    promptNextMirrorCountry();
+                } else {
+                    if (playStyle === 'paced') startPacedTimer();
+                    else selectNextCountry();
+                }
                 updateTimerDisplay();
-                selectNextCountry();
             }
 
             startQuizBtn.addEventListener('click', startQuiz);
@@ -909,15 +1019,26 @@
                 let correctCount = Object.keys(userAnswers).length;
                 let missesHTML = '';
                 
-                allCountries.forEach(country => {
-                    if (!userAnswers[country.name]) {
-                        missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800">You missed: <strong>${country.name}</strong>.</div>`;
+                geoJsonLayer.eachLayer(layer => {
+                    const name = layer.feature.properties.name;
+                    if (name === 'Antarctica' || bundledCountries.includes(name) || name === 'Falkland Islands (Malvinas)') return;
+
+                    const isGuessed = userAnswers[name];
+                    const wasMissed = layer.options.fillColor === getStyle('incorrectFinished').fillColor;
+
+                    if (!isGuessed || wasMissed) {
+                         missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800">You missed: <strong>${name}</strong>.</div>`;
                     }
                 });
-                
+
                 if(missesHTML === '') missesHTML = `<p class="text-green-700">Perfect score!</p>`;
 
-                scoreTitle.textContent = reason === 'time' ? "Time's Up!" : "Your Score";
+                if (reason === 'time') {
+                    scoreTitle.textContent = "Time's Up!";
+                } else {
+                    scoreTitle.textContent = "Your Score";
+                }
+                
                 finalScoreDisplay.textContent = `${correctCount}/${allCountries.length}`;
                 scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
                 missesContainer.innerHTML = missesHTML;
@@ -973,6 +1094,7 @@
                     
                     let styleKey;
                     const isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
+                    
                     if (isGuessed) {
                         if (theme === 'earth') {
                             const biome = getCountryBiome(countryName);
@@ -998,6 +1120,7 @@
                 document.getElementById('quiz-controls-container').classList.remove('hidden');
                 startQuizBtn.classList.remove('hidden');
                 guessInput.classList.add('hidden');
+                guessInput.readOnly = false;
                 settingsPanel.classList.remove('hidden');
                 finishAttemptBtn.style.display = 'none';
                 backToQuizBtn.classList.add('hidden');
@@ -1020,6 +1143,7 @@
                 score = 0;
                 quizStartTime = 0;
                 zenTimeElapsed = 0;
+                mirrorTries = 4;
                 updateScoreDisplay();
                 stopAllTimers();
                 resetCombo();
@@ -1029,7 +1153,7 @@
             }
             
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Tab' && quizState === 'playing') {
+                if (e.key === 'Tab' && quizState === 'playing' && difficulty !== 'mirror') {
                     e.preventDefault();
                     if (e.shiftKey) selectPreviousCountry();
                     else selectNextCountry();
@@ -1058,16 +1182,30 @@
                 updateTimerDisplay();
             }
 
-            function startPacedTimer() {
-                stopAllTimers(); // Stop other timers like the main one if it exists
+            function startPacedTimer(moveToNext = false) {
+                stopAllTimers();
                 pacedTimeRemaining = PACED_DURATION;
                 updateTimerDisplay();
+
+                if (moveToNext) {
+                    if (difficulty === 'mirror') promptNextMirrorCountry();
+                    else selectNextCountry();
+                }
+
                 timerInterval = setInterval(() => {
                     pacedTimeRemaining--;
                     updateTimerDisplay();
                     if (pacedTimeRemaining < 0) {
-                        clearInterval(timerInterval);
-                        selectNextCountry(); // Considered a miss, move to next
+                        // Mark as missed and move to next
+                        if (difficulty === 'mirror') {
+                            const correctName = quizSequence[currentSequenceIndex].name;
+                            const missedLayer = countryData[correctName];
+                            if (missedLayer) missedLayer.setStyle(getStyle('incorrectFinished'));
+                            promptNextMirrorCountry();
+                        } else {
+                            selectNextCountry();
+                        }
+                        startPacedTimer(); // Restart timer for the new country
                     }
                 }, 1000);
             }
@@ -1129,7 +1267,7 @@
                     content: `
                         <p><strong>Random:</strong> Countries are selected in a random order.</p>
                         <p><strong>Alphabetical:</strong> Countries are selected in alphabetical order.</p>
-                        <p><strong>Path:</strong> Countries are selected following a logical geographical path across the globe.`
+                        <p><strong>Path:</strong> Countries are selected following a logical geographical path across the globe. (Not available in Mirror mode).</p>`
                 },
                 difficulty: {
                     title: 'Difficulty',
@@ -1137,7 +1275,8 @@
                         <p><strong>Easy:</strong> Shows the first letter, the number of letters, and reveals a random letter every 3 seconds.</p>
                         <p><strong>Normal:</strong> Shows the first letter and underscores for the rest of the word.</p>
                         <p><strong>Hard:</strong> Shows only underscores representing the number of letters.</p>
-                        <p><strong>Extreme:</strong> No hints are provided.`
+                        <p><strong>Extreme:</strong> No hints are provided.</p>
+                        <p><strong>Mirror:</strong> Click the prompted country on the map. You have 4 incorrect clicks per country.</p>`
                 },
                 theme: {
                     title: 'Theme',
