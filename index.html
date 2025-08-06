@@ -46,10 +46,6 @@
             pointer-events: none;
         }
         /* Combo and Score Styles */
-        #combo-text {
-            transition: all 0.3s ease;
-            text-shadow: 0 0 5px rgba(0,0,0,0.2);
-        }
         .combo-heat-max {
             color: #ef4444;
             animation: pulse 1s infinite;
@@ -76,9 +72,6 @@
             bottom: 150%;
             opacity: 1;
         }
-        #combo-bar {
-            transition: width 0.1s linear, background-color 0.3s ease;
-        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4">
@@ -93,28 +86,43 @@
 
         <div class="map-container mb-6">
             <div id="map" class="shadow-lg"></div>
-            <div id="timer-display" class="absolute top-3 left-3 bg-white bg-opacity-80 text-blue-900 font-bold text-xl px-3 py-1 rounded-lg shadow-md z-10">15:00</div>
+            
+            <!-- Status Display with Wrapped SVG Timer -->
+            <div id="status-display-container" class="absolute top-3 left-3 z-10 hidden">
+                <div class="relative w-[90px] h-[45px]">
+                    <!-- Background and shadow -->
+                    <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
+                    <!-- SVG for the animated border -->
+                    <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
+                        <path id="timer-progress-bar"
+                              d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 2,35 L 2,10 A 8,8 0 0 1 10,2 L 45,2"
+                              fill="none" stroke="#3b82f6" stroke-width="4"
+                              style="transition: stroke-dashoffset 0.1s linear;"/>
+                    </svg>
+                    <!-- Text content -->
+                    <div id="timer-display" class="relative w-full h-full flex items-center justify-center text-blue-900 font-bold text-xl">
+                        <!-- Timer/combo text will be injected here -->
+                    </div>
+                </div>
+            </div>
+
             <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-1/2 max-w-md z-10 text-center">
                  <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl">Start Quiz</button>
                  <div class="relative">
                     <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
                     <div id="points-indicator"></div>
                  </div>
-                 <div id="combo-container" class="hidden w-full bg-gray-200 rounded-full h-2.5 mt-3 shadow-inner overflow-hidden">
-                    <div id="combo-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-                 </div>
-                 <div id="combo-text" class="hidden h-8 mt-1 text-lg font-bold"></div>
             </div>
         </div>
 
         <div id="settings-panel" class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-lg shadow-inner">
             <div class="space-y-3">
-                <h3 class="text-lg font-semibold text-gray-700">Timer</h3>
-                <div id="timer-options" class="setting-control flex space-x-1 bg-gray-200 p-1 rounded-lg">
-                    <button data-value="none" class="flex-1 py-2 px-4 rounded-md font-medium">None</button>
-                    <button data-value="10" class="flex-1 py-2 px-4 rounded-md font-medium">10m</button>
-                    <button data-value="15" class="flex-1 py-2 px-4 rounded-md font-medium active">15m</button>
-                    <button data-value="20" class="flex-1 py-2 px-4 rounded-md font-medium">20m</button>
+                <h3 class="text-lg font-semibold text-gray-700">Play Style</h3>
+                <div id="play-style-options" class="setting-control flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                    <button data-value="zen" class="flex-1 py-2 px-4 rounded-md font-medium">Zen</button>
+                    <button data-value="timed" class="flex-1 py-2 px-4 rounded-md font-medium active">Timed</button>
+                    <button data-value="paced" class="flex-1 py-2 px-4 rounded-md font-medium">Paced</button>
+                    <button data-value="sprint" class="flex-1 py-2 px-4 rounded-md font-medium">Sprint</button>
                 </div>
             </div>
             <div class="space-y-3">
@@ -164,7 +172,7 @@
             let geoJsonLayer, selectedCountryLayer = null, timerInterval = null;
             let userAnswers = {}, countryData = {}, allCountries = [], countryPath = [];
             let quizState = 'pre-start'; // 'pre-start', 'playing', 'finished'
-            let timerDuration = 15; // in minutes
+            let playStyle = 'timed'; // 'zen', 'timed', 'paced', 'sprint'
             let tabOrder = 'random';
             let quizSequence = [];
             let currentSequenceIndex = -1;
@@ -175,7 +183,8 @@
             let comboMultiplier = 1;
             let countrySelectedTimestamp = 0;
             let comboTimerInterval = null;
-            const COMBO_DURATION = 5000; // 5 seconds for a combo
+            const COMBO_DURATION = 5000; // 5 seconds for a combo in Sprint mode
+            const PACED_DURATION = 15; // 15 seconds per country in Paced mode
 
             // --- COUNTRY DATA, ALIASES, AND PATH ---
             const countryNameCorrections = { "Dem. Rep. Congo": "Democratic Republic of the Congo", "Central African Rep.": "Central African Republic", "Dominican Rep.": "Dominican Republic", "Eq. Guinea": "Equatorial Guinea", "Bosnia and Herz.": "Bosnia and Herzegovina", "S. Sudan": "South Sudan", "W. Sahara": "Western Sahara", "Solomon Is.": "Solomon Islands", "Antigua and Barb.": "Antigua and Barbuda", "St. Kitts and Nevis": "Saint Kitts and Nevis", "St. Lucia": "Saint Lucia", "St. Vin. and Gren.": "Saint Vincent and the Grenadines", "Swaziland": "Eswatini", "United Republic of Tanzania": "Tanzania", "Côte d'Ivoire": "Ivory Coast" };
@@ -208,17 +217,19 @@
             const viewFinishedMapBtn = document.getElementById('view-finished-map-btn');
             const backToQuizBtn = document.getElementById('back-to-quiz-btn');
             const subtitle = document.getElementById('subtitle');
+            const statusDisplayContainer = document.getElementById('status-display-container');
             const timerDisplay = document.getElementById('timer-display');
+            const timerProgressBar = document.getElementById('timer-progress-bar');
             const scoreTitle = document.getElementById('score-title');
-            const timerOptions = document.getElementById('timer-options');
+            const playStyleOptions = document.getElementById('play-style-options');
             const tabOrderOptions = document.getElementById('tab-order-options');
             const startQuizBtn = document.getElementById('start-quiz-btn');
             const settingsPanel = document.getElementById('settings-panel');
             const scoreDisplay = document.getElementById('score-display');
             const pointsIndicator = document.getElementById('points-indicator');
-            const comboContainer = document.getElementById('combo-container');
-            const comboBar = document.getElementById('combo-bar');
-            const comboText = document.getElementById('combo-text');
+
+            // --- SVG TIMER SETUP ---
+            let progressBarLength; // Declare here, initialize later
 
             finishAttemptBtn.style.display = 'none';
 
@@ -280,7 +291,7 @@
 
                     allCountries.sort((a, b) => a.name.localeCompare(b.name));
                     countryPath = pathData.toLowerCase().split(/\s+/);
-                    resetTimer();
+                    updateTimerDisplay(); // Initial display setup
                 });
 
             // --- STYLING FUNCTIONS ---
@@ -336,6 +347,7 @@
             
             function selectCountry(layer) {
                 if (!layer || userAnswers[layer.feature.properties.name]) return;
+
                 if (selectedCountryLayer && !userAnswers[selectedCountryLayer.feature.properties.name]) {
                     geoJsonLayer.resetStyle(selectedCountryLayer);
                     getRelatedLayers(selectedCountryLayer).forEach(l => geoJsonLayer.resetStyle(l));
@@ -348,6 +360,10 @@
                 guessInput.focus();
                 guessInput.placeholder = `Guess the selected country...`;
                 countrySelectedTimestamp = Date.now();
+                
+                if (playStyle === 'paced') {
+                    startPacedTimer();
+                }
             }
 
             function smartFitBounds(layer) {
@@ -447,7 +463,7 @@
                     if (userAnswers[correctName]) return;
 
                     userAnswers[correctName] = true;
-                    if (tabOrder === 'random') {
+                    if (playStyle === 'sprint') {
                         processCorrectGuessForCombo(guess, correctName);
                     }
                     
@@ -487,24 +503,26 @@
             }
 
             function startComboTimer() {
-                comboBar.style.width = '100%';
                 const startTime = Date.now();
                 
                 comboTimerInterval = setInterval(() => {
                     const elapsedTime = Date.now() - startTime;
                     const remainingPercentage = Math.max(0, 100 - (elapsedTime / COMBO_DURATION) * 100);
-                    comboBar.style.width = remainingPercentage + '%';
+                    
+                    const offset = progressBarLength * (1 - (remainingPercentage / 100));
+                    timerProgressBar.style.strokeDashoffset = offset;
 
                     if (remainingPercentage <= 0) {
                         clearInterval(comboTimerInterval);
                         resetCombo();
                     }
-                }, 50); // Update ~20 times per second
+                }, 50);
             }
 
             function resetCombo() {
                 comboCount = 0;
                 updateComboMeter();
+                timerProgressBar.style.strokeDashoffset = progressBarLength;
             }
 
             function updateScoreDisplay() {
@@ -512,29 +530,24 @@
             }
 
             function updateComboMeter() {
-                comboText.classList.remove('combo-heat-max');
-                comboBar.classList.remove('bg-blue-600', 'bg-amber-500', 'bg-red-600');
+                timerDisplay.classList.remove('combo-heat-max');
+                
+                comboMultiplier = 1;
 
                 if (comboCount === 0) {
-                    comboText.textContent = '';
-                    comboMultiplier = 1;
+                    timerDisplay.textContent = '1x';
                     return;
                 }
                 
-                if (comboCount < 3) {
-                    comboText.textContent = `${'🔥'.repeat(comboCount)}`;
-                    comboMultiplier = 1;
-                    comboBar.classList.add('bg-blue-600');
+                if (comboCount === 1) {
+                    timerDisplay.textContent = '🔥1x';
+                } else if (comboCount === 2) {
+                    timerDisplay.textContent = '🔥1x🔥';
                 } else {
                     comboMultiplier = Math.min(8, 1 + (comboCount - 2)); // 2x at 3, 3x at 4, etc., max 8x
-                    comboText.textContent = `${comboCount}x COMBO`;
+                    timerDisplay.textContent = `${comboMultiplier}x`;
                     if (comboMultiplier >= 8) {
-                        comboText.classList.add('combo-heat-max');
-                        comboBar.classList.add('bg-red-600');
-                    } else if (comboMultiplier >= 5) {
-                        comboBar.classList.add('bg-red-600');
-                    } else if (comboMultiplier >= 3) {
-                        comboBar.classList.add('bg-amber-500');
+                        timerDisplay.classList.add('combo-heat-max');
                     }
                 }
             }
@@ -558,11 +571,11 @@
                 return null;
             }
 
-            timerOptions.addEventListener('click', (e) => {
-                const value = handleSettingClick(e, timerOptions);
+            playStyleOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, playStyleOptions);
                 if (value) {
-                    timerDuration = value;
-                    resetTimer();
+                    playStyle = value;
+                    updateTimerDisplay(); // Update display based on new style
                 }
             });
 
@@ -579,11 +592,17 @@
                 finishAttemptBtn.style.display = 'inline-block';
                 finishAttemptBtn.disabled = true;
                 settingsPanel.classList.add('disabled');
+                statusDisplayContainer.classList.remove('hidden');
+
+                // --- Initialize SVG progress bar length now that it's visible ---
+                if (!progressBarLength) { // Only run this once
+                    progressBarLength = timerProgressBar.getTotalLength();
+                    timerProgressBar.style.strokeDasharray = progressBarLength;
+                    timerProgressBar.style.strokeDashoffset = progressBarLength;
+                }
                 
-                if (tabOrder === 'random') {
+                if (playStyle === 'sprint') {
                     scoreDisplay.classList.remove('hidden');
-                    comboContainer.classList.remove('hidden');
-                    comboText.classList.remove('hidden');
                 }
                 
                 quizSequence = [];
@@ -616,7 +635,8 @@
                         break;
                 }
 
-                if (timerDuration !== 'none') startTimer();
+                if (playStyle === 'timed') startTimer();
+                updateTimerDisplay();
                 selectNextCountry();
             }
 
@@ -624,8 +644,8 @@
             
             function finishQuiz(reason) {
                 quizState = 'finished';
-                stopTimer();
-                clearInterval(comboTimerInterval);
+                stopAllTimers();
+                
                 let correctCount = Object.keys(userAnswers).length;
                 let missesHTML = '';
                 
@@ -642,7 +662,7 @@
                 scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
                 missesContainer.innerHTML = missesHTML;
                 
-                if (tabOrder === 'random') {
+                if (playStyle === 'sprint') {
                     finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
                 } else {
                     finalTotalScoreDisplay.textContent = '';
@@ -675,8 +695,7 @@
                 backToQuizBtn.classList.remove('hidden');
                 subtitle.textContent = "Here's a review of your answers.";
                 scoreDisplay.classList.add('hidden');
-                comboContainer.classList.add('hidden');
-                comboText.classList.add('hidden');
+                statusDisplayContainer.classList.add('hidden');
                 
                 tooltipLayerGroup.clearLayers();
                 
@@ -706,9 +725,7 @@
                 backToQuizBtn.classList.add('hidden');
                 subtitle.textContent = "Configure your settings and press Start!";
                 scoreDisplay.classList.add('hidden');
-                comboContainer.classList.add('hidden');
-                comboText.classList.add('hidden');
-                
+
                 tooltipLayerGroup.clearLayers();
                 
                 geoJsonLayer.eachLayer(layer => {
@@ -722,14 +739,16 @@
                 guessInput.value = '';
                 guessInput.placeholder = 'Type country name...';
                 
-                // Reset score and combo
                 score = 0;
                 updateScoreDisplay();
-                clearInterval(comboTimerInterval);
-                comboBar.style.width = '0%';
+                stopAllTimers();
                 resetCombo();
+                updateComboMeter();
+                if (progressBarLength) { // Check if it was initialized
+                    timerProgressBar.style.strokeDashoffset = progressBarLength;
+                }
 
-                resetTimer();
+                updateTimerDisplay(); // Resets display text
             }
             
             document.addEventListener('keydown', (e) => {
@@ -745,10 +764,10 @@
 
             // --- TIMER LOGIC ---
             let timeRemaining;
+            let pacedTimeRemaining;
+
             function startTimer() {
-                if(timerInterval) clearInterval(timerInterval);
-                if (timerDuration === 'none') return;
-                timeRemaining = parseInt(timerDuration) * 60;
+                timeRemaining = 15 * 60;
                 updateTimerDisplay();
                 timerInterval = setInterval(() => {
                     timeRemaining--;
@@ -758,28 +777,53 @@
                     }
                 }, 1000);
             }
+
+            function startPacedTimer() {
+                stopAllTimers(); // Stop previous paced timer
+                pacedTimeRemaining = PACED_DURATION;
+                updateTimerDisplay();
+                timerInterval = setInterval(() => {
+                    pacedTimeRemaining--;
+                    updateTimerDisplay();
+                    if (pacedTimeRemaining < 0) {
+                        finishQuiz('time');
+                    }
+                }, 1000);
+            }
             
             function updateTimerDisplay() {
-                if (timerDuration === 'none') {
-                    timerDisplay.textContent = 'No Timer';
-                    return;
+                statusDisplayContainer.classList.remove('hidden');
+                timerProgressBar.style.display = 'none'; // Hide by default
+                
+                switch(playStyle) {
+                    case 'zen':
+                        statusDisplayContainer.classList.add('hidden');
+                        break;
+                    case 'timed':
+                        if (quizState === 'pre-start') timeRemaining = 15 * 60;
+                        const minutes = Math.floor(timeRemaining / 60);
+                        const seconds = timeRemaining % 60;
+                        timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                        break;
+                    case 'paced':
+                        timerProgressBar.style.display = 'block'; // Show for paced
+                        if (quizState === 'pre-start') pacedTimeRemaining = PACED_DURATION;
+                        timerDisplay.textContent = `${pacedTimeRemaining}s`;
+                        const pacedOffset = progressBarLength * (1 - (pacedTimeRemaining / PACED_DURATION));
+                        timerProgressBar.style.strokeDashoffset = pacedOffset;
+                        break;
+                    case 'sprint':
+                        timerProgressBar.style.display = 'block'; // Show for sprint
+                        updateComboMeter();
+                        break;
                 }
-                const minutes = Math.floor(timeRemaining / 60);
-                const seconds = timeRemaining % 60;
-                timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
             }
 
-            function stopTimer() {
+            function stopAllTimers() {
                 clearInterval(timerInterval);
+                clearInterval(comboTimerInterval);
                 timerInterval = null;
-            }
-
-            function resetTimer() {
-                stopTimer();
-                if (timerDuration !== 'none') {
-                    timeRemaining = parseInt(timerDuration) * 60;
-                }
-                updateTimerDisplay();
+                comboTimerInterval = null;
             }
         });
     </script>
