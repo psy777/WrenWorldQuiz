@@ -1427,8 +1427,13 @@
                     if (playStyle === 'paced') startPacedTimer();
                     promptNextMirrorCountry();
                 } else {
-                    if (playStyle === 'paced') startPacedTimer();
-                    else selectNextCountry();
+                    if (playStyle === 'paced') {
+                        // This line is changed to automatically select the first country.
+                        startPacedTimer(true);
+                    } else {
+                        selectNextCountry();
+                    }
+                    guessInput.focus();
                 }
                 updateTimerDisplay();
             }
