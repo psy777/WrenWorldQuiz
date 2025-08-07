@@ -1,0 +1,6 @@
+button on mobile ugly
+gap between map and settings on mobile (low)
+timer in wrong corner
+missing country data in explore mode (fasal, papuanewguinea, bosniaandherzegovina)
+explore mode should track the countries you've already visited
+country should flash red if incorrect click in mirror mode

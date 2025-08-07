@@ -84,6 +84,7 @@
             <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map quiz-controls-container</h1>
             <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
             <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
+            <div id="explored-counter" class="hidden absolute top-0 right-0 bg-green-100 text-green-800 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md"></div>
             <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
         </header>
 
@@ -93,12 +94,12 @@
                 <div class="map-container mb-6 relative">
                     <div class="relative shadow-lg border-2 border-blue-900" style="height: 65vh; border-radius: 0.5rem;">
                         <div id="map" class="w-full h-full"></div>
-                        <div id="status-display-container" class="absolute top-3 right-3 z-10 hidden">
-                            <div class="relative w-[90px] h-[45px]">
+                        <div id="status-display-container" class="absolute top-3 left-1/2 -translate-x-1/2 z-10 mx-4">
+                            <div class="relative w-[100px] h-[50px]">
                                 <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
-                                <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
+                                <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 50">
                                     <path id="timer-progress-bar"
-                                          d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 10,2 L 45,2"
+                                          d="M 50,2 L 90,2 A 8,8 0 0 1 98,10 L 98,40 A 8,8 0 0 1 90,48 L 10,48 A 8,8 0 0 1 2,40 L 2,10 A 8,8 0 0 1 10,2 L 50,2"
                                           fill="none" stroke="#3b82f6" stroke-width="4"
                                           style="transition: stroke-dashoffset 0.1s linear;"/>
                                 </svg>
@@ -424,6 +425,7 @@
             let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'oceanic'
             let quizSequence = [];
             let currentSequenceIndex = -1;
+            let exploredCountries = {};
             
             // --- SCORING AND COMBO STATE ---
             let score = 0;
@@ -492,6 +494,7 @@
             const countryInfoPanel = document.getElementById('country-info-panel');
             const countryInfoName = document.getElementById('country-info-name');
             const countryInfoBio = document.getElementById('country-info-bio');
+            const exploredCounter = document.getElementById('explored-counter');
 
             // --- SVG TIMER SETUP ---
             let progressBarLength; 
@@ -660,28 +663,21 @@
                         if (quizState === 'finished') {
                             const isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
                             if (isGuessed) {
-                                if (theme === 'earth') {
-                                    const biome = getCountryBiome(name);
-                                    styleKey = `correctFinished_${biome}`;
-                                } else {
-                                    styleKey = 'correctFinished';
-                                }
+                                styleKey = (theme === 'earth') ? `correctFinished_${getCountryBiome(name)}` : 'correctFinished';
                             } else {
                                 styleKey = 'incorrectFinished';
                             }
-                        } else if (layer === selectedCountryLayer) { // Works for both quiz and explore
+                        } else if (layer === selectedCountryLayer) {
                             styleKey = 'selected';
-                        } else if (userAnswers[name]) {
-                             if (theme === 'earth') {
-                                const biome = getCountryBiome(name);
-                                styleKey = `guessed_${biome}`;
-                            } else {
-                                styleKey = 'guessed';
-                            }
                         } else if (name === 'Antarctica') {
                             styleKey = 'unclickable';
                         } else {
-                            styleKey = 'default';
+                            const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                            if (isAnswered) {
+                                styleKey = (theme === 'earth') ? `guessed_${getCountryBiome(name)}` : 'guessed';
+                            } else {
+                                styleKey = 'default';
+                            }
                         }
                         layer.setStyle(getStyle(styleKey));
                     });
@@ -781,24 +777,29 @@
             }
 
             // --- EXPLORE MODE LOGIC ---
+            function updateExploredCounter() {
+                if (quizState !== 'explore') return;
+                const exploredCount = Object.keys(exploredCountries).length;
+                const totalCount = allCountries.length;
+                exploredCounter.textContent = `Explored: ${exploredCount}/${totalCount}`;
+                subtitle.textContent = "Select a country to learn more about it.";
+            }
+
             function showCountryInfo(layer) {
                 if (!layer) return;
-                
-                // Deselect previous country
-                if (selectedCountryLayer) {
-                    selectedCountryLayer.setStyle(getStyle('default'));
-                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('default')));
-                }
-                
-                selectedCountryLayer = layer;
+
                 const name = layer.feature.properties.name;
+                if (!exploredCountries[name]) {
+                    exploredCountries[name] = true;
+                    updateExploredCounter();
+                }
+
+                selectedCountryLayer = layer;
+                applyTheme(theme);
+                layer.bringToFront();
+
                 const normalizedName = normalize(name);
                 const details = countryDetails[normalizedName];
-
-                // Style the selected country
-                layer.setStyle(getStyle('selected'));
-                getRelatedLayers(layer).forEach(l => l.setStyle(getStyle('selected')));
-                layer.bringToFront();
 
                 if (details) {
                     countryInfoName.textContent = details.name;
@@ -1270,10 +1271,13 @@
 
             function updatePlayStyleUI(newPlayStyle) {
                 playStyle = newPlayStyle;
+                exploredCounter.classList.toggle('hidden', newPlayStyle !== 'explore');
+                scoreDisplay.classList.toggle('hidden', newPlayStyle === 'explore');
+
                 if (playStyle === 'explore') {
                     quizState = 'explore';
                     document.getElementById('main-title').textContent = 'World Map Explorer';
-                    subtitle.textContent = "Select a country to learn more about it.";
+                    updateExploredCounter();
                     startQuizBtn.classList.add('hidden');
                     guessInput.classList.add('hidden');
                     learnBtn.classList.remove('hidden');
@@ -1293,12 +1297,9 @@
                     tabOrderOptions.parentElement.classList.remove('disabled');
                     difficultyOptions.parentElement.classList.remove('disabled');
                     countryInfoPanel.classList.add('opacity-0', '-translate-x-4', 'pointer-events-none');
-                    if (selectedCountryLayer) {
-                        selectedCountryLayer.setStyle(getStyle('default'));
-                        getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('default')));
-                        selectedCountryLayer = null;
-                    }
+                    selectedCountryLayer = null;
                 }
+                applyTheme(theme);
                 updateTimerDisplay();
             }
 
@@ -1530,11 +1531,7 @@
                 }
                 
                 geoJsonLayer.eachLayer(layer => {
-                    if (layer.feature.properties.name === 'Antarctica') layer.setStyle(getStyle('unclickable'));
-                    else {
-                        layer.setStyle(getStyle('default'));
-                        layer.unbindTooltip();
-                    }
+                    layer.unbindTooltip();
                 });
 
                 userAnswers = {};
