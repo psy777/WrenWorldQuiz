@@ -758,9 +758,12 @@
                         if (quizState === 'playing' && difficulty !== 'mirror') highlightFeature(getMainLayer(e.target)); 
                         if (quizState === 'explore') highlightFeature(getMainLayer(e.target));
                     },
-                    mouseout: e => { 
-                        if (quizState === 'playing' && difficulty !== 'mirror') resetHighlight(getMainLayer(e.target)); 
-                        if (quizState === 'explore') resetHighlight(getMainLayer(e.target));
+                    mouseout: e => {
+                        const layer = getMainLayer(e.target);
+                        if (layer === selectedCountryLayer) return; // Moved check here
+
+                        if (quizState === 'playing' && difficulty !== 'mirror') resetHighlight(layer); 
+                        if (quizState === 'explore') resetHighlight(layer);
                     },
                     click: e => {
                         const mainLayer = getMainLayer(e.target);
@@ -790,11 +793,7 @@
                 if (!layer) return;
 
                 const name = layer.feature.properties.name;
-                if (!exploredCountries[name]) {
-                    exploredCountries[name] = true;
-                    updateExploredCounter();
-                }
-
+                
                 selectedCountryLayer = layer;
                 applyTheme(theme);
                 layer.bringToFront();
@@ -856,6 +855,11 @@
                     quizFeedback.className = "mt-3 text-center font-semibold text-green-600";
                     quizFeedback.classList.remove('hidden');
                     
+                    const name = selectedCountryLayer.feature.properties.name;
+                    if (!exploredCountries[name]) {
+                        exploredCountries[name] = true;
+                        updateExploredCounter();
+                    }
                     // The quiz section will remain visible.
                 } else {
                     quizFeedback.textContent = "Not quite right. Try again!";
@@ -968,7 +972,10 @@
             }
 
             function highlightFeature(layer) {
-                if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
+                const name = layer.feature.properties.name;
+                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                if (isAnswered || layer === selectedCountryLayer) return;
+                
                 const style = { weight: 3, color: getStyle('selected').color };
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
@@ -976,9 +983,10 @@
             }
 
             function resetHighlight(layer) {
-                if (layer === selectedCountryLayer) return;
-                if (userAnswers[layer.feature.properties.name]) return;
-                
+                const name = layer.feature.properties.name;
+                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                if (isAnswered) return;
+
                 const style = getStyle('default');
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
