@@ -402,7 +402,7 @@
           "fiji": { "continent": "Australia/Oceania", "name": "Fiji", "bio": "Fiji is an archipelago of more than 300 islands, famous for its rugged landscapes, coral reefs, and as a major producer of bottled water.", "quiz_question": "What beverage is a major export for Fiji?", "quiz_answer": "Bottled water", "biome": "rainforest", "biome_color": "#2e8b57" },
           "newcaledonia": { "continent": "Australia/Oceania", "name": "New Caledonia", "bio": "New Caledonia is a French territory known for its large barrier reef, which is second in length only to the Great Barrier Reef.", "quiz_question": "New Caledonia is what country's territory?", "quiz_answer": "France", "biome": "rainforest", "biome_color": "#2e8b57" },
           "newzealand": { "continent": "Australia/Oceania", "name": "New Zealand", "bio": "New Zealand is renowned for its stunning landscapes, which served as the filming locations for 'The Lord of the Rings' trilogy, and for being the first country to grant women the right to vote.", "quiz_question": "What major film series showcased New Zealand's landscapes to the world?", "quiz_answer": "The Lord of the Rings", "biome": "temperate", "biome_color": "#6b8e23" },
-          "frenchandsouthernantarcticlands": { "continent": "Antarctica", "name": "French Southern and Antarctic Lands", "bio": "This territory consists of remote subantarctic islands and a slice of Antarctica, serving primarily as a base for scientific research.", "quiz_question": "What is the main human activity in the French Southern and Antarctic Lands?", "quiz_answer": "Scientific research", "biome": "tundra", "biome_color": "#add8e6" },
+          "frenchsouthernandantarcticlands": { "continent": "Antarctica", "name": "French Southern and Antarctic Lands", "bio": "This territory consists of remote subantarctic islands and a slice of Antarctica, serving primarily as a base for scientific research.", "quiz_question": "What is the main human activity in the French Southern and Antarctic Lands?", "quiz_answer": "Scientific research", "biome": "tundra", "biome_color": "#add8e6" },
           "antarctica": { "continent": "Antarctica", "name": "Antarctica", "bio": "Antarctica is the Earth's southernmost continent, a virtually uninhabited, ice-covered landmass dedicated to peace and science by international treaty.", "quiz_question": "What is Antarctica primarily dedicated to by international agreement?", "quiz_answer": "Peace and science", "biome": "tundra", "biome_color": "#add8e6" }
         };
     </script>
@@ -457,6 +457,7 @@
                 'bahamas': 'thebahamas', 'falklandislands': 'falklandislands(malvinas)',
                 'easttimor': 'timorleste', 'northmacedonia': 'macedonia', 'serbia': 'republicofserbia', 'czechia': 'czechrepublic', 'bosnia': 'bosniaandherzegovina'
             };
+            const reverseAliases = Object.fromEntries(Object.entries(countryAliases).map(([key, value]) => [value, key]));
             const specialCases = { 'congo': ['democraticrepublicofthecongo', 'republicofthecongo'] };
 
             const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paray uruguay argentina chile falklandislands Iceland ireland uk Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany denmark netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman uae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
@@ -799,7 +800,7 @@
                 layer.bringToFront();
 
                 const normalizedName = normalize(name);
-                const details = countryDetails[normalizedName];
+                const details = countryDetails[normalizedName] || countryDetails[reverseAliases[normalizedName]];
 
                 if (details) {
                     countryInfoName.textContent = details.name;
