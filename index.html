@@ -158,7 +158,6 @@
         </div>
     </div>
 
-    <!-- Score Modal -->
     <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
         <div id="score-modal-content" class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
             <h2 class="text-4xl font-bold text-blue-900 mb-4" id="score-title">Your Score</h2>
@@ -170,14 +169,14 @@
                 <h3 class="font-bold text-lg mb-2 text-red-700">Missed Answers:</h3>
                 <div id="misses-container"></div>
             </div>
-            <div class="flex justify-center space-x-4">
+            <div class="flex flex-wrap justify-center items-center gap-4">
                 <button id="close-modal-btn" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition shadow-md">Play Again</button>
                 <button id="view-finished-map-btn" class="bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition shadow-md">View Finished Map</button>
+                <a href="https://ko-fi.com/ohasa" target="_blank" rel="noopener noreferrer" class="inline-block bg-pink-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-pink-600 transition shadow-md">Like this quiz? Buy me a coffee!</a>
             </div>
         </div>
     </div>
     
-    <!-- Info Modal -->
     <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center p-4">
         <div id="info-modal-content" class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full text-left transform transition-all scale-95 opacity-100 relative">
             <button id="close-info-modal-btn" class="absolute top-2 right-2 text-gray-400 hover:text-gray-600">
@@ -188,6 +187,14 @@
         </div>
     </div>
 
+    <footer class="text-center py-4">
+        <p class="text-gray-600 text-sm">
+            Enjoying the quiz? 
+            <a href="https://ko-fi.com/ohasa" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:underline">
+                Buy me a coffee!
+            </a>
+        </p>
+    </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -324,7 +331,7 @@
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                     mapBg: '#a2d2ff',
                     styles: {
-                        default: { fillColor: '#a16207', weight: 1, color: '#422006', fillOpacity: 0.7 },
+                        default: { fillColor: '#eeeee4', weight: 1, color: '#422006', fillOpacity: 0.7 },
                         selected: { weight: 4, color: '#ca8a04', fillColor: '#fef08a' },
                         incorrectFinished: { fillColor: '#b91c1c', weight: 1, color: 'white', fillOpacity: 0.9 },
                         unclickable: { fillColor: '#d6d3d1', weight: 1, color: '#a8a29e', fillOpacity: 0.5 },
