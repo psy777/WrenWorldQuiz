@@ -924,6 +924,23 @@
                     }
                 } else {
                     mirrorTries--;
+                    
+                    // Flash red for incorrect guess
+                    const incorrectLayer = clickedLayer;
+                    const originalStyle = getStyle('default');
+                    const flashStyle = getStyle('incorrectFinished');
+                    
+                    incorrectLayer.setStyle(flashStyle);
+                    getRelatedLayers(incorrectLayer).forEach(l => l.setStyle(flashStyle));
+
+                    setTimeout(() => {
+                        if (!userAnswers[incorrectLayer.feature.properties.name]) {
+                            incorrectLayer.setStyle(originalStyle);
+                            getRelatedLayers(incorrectLayer).forEach(l => l.setStyle(originalStyle));
+                        }
+                    }, 400);
+
+
                     if (mirrorTries <= 0) {
                         const correctLayer = countryData[correctName];
                         if (correctLayer) {
