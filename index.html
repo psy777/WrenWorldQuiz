@@ -12,7 +12,7 @@
         body { font-family: 'Inter', sans-serif; }
         .map-container { position: relative; }
         #map {
-            height: 65vh;
+            height: 100%;
             width: 100%;
             border-radius: 0.5rem;
             z-index: 1;
@@ -91,7 +91,30 @@
             <!-- Map container with overlaid quiz panel -->
             <div class="w-full">
                 <div class="map-container mb-6 relative">
-                    <div id="map" class="shadow-lg border-2 border-blue-900"></div>
+                    <div class="relative shadow-lg border-2 border-blue-900" style="height: 65vh; border-radius: 0.5rem;">
+                        <div id="map" class="w-full h-full"></div>
+                        <div id="status-display-container" class="absolute top-3 right-3 z-10 hidden">
+                            <div class="relative w-[90px] h-[45px]">
+                                <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
+                                <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
+                                    <path id="timer-progress-bar"
+                                          d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 10,2 L 45,2"
+                                          fill="none" stroke="#3b82f6" stroke-width="4"
+                                          style="transition: stroke-dashoffset 0.1s linear;"/>
+                                </svg>
+                                <div id="timer-display" class="relative w-full h-full flex items-center justify-center text-blue-900 font-bold text-xl">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-11/12 sm:w-2/3 max-w-lg z-10 text-center">
+                             <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl w-full">Start Quiz</button>
+                             <div class="relative flex items-center gap-2">
+                                <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
+                                <button id="learn-btn" class="hidden bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition shadow-md text-lg w-auto whitespace-nowrap">Explore</button>
+                                <div id="points-indicator"></div>
+                             </div>
+                        </div>
+                    </div>
                     
                     <!-- Country Info Panel - Overlaid on map for large screens, below map for small screens -->
                     <div id="country-info-panel" class="absolute top-4 left-4 bottom-4 max-w-sm flex flex-col bg-white p-6 rounded-lg shadow-lg opacity-0 -translate-x-4 pointer-events-none z-20 transition-all duration-300 md:absolute md:top-4 md:left-4 max-md:relative max-md:top-0 max-md:left-0 max-md:w-full max-md:max-w-none max-md:mt-4 max-md:translate-x-0">
@@ -107,29 +130,6 @@
                             </div>
                             <div id="quiz-feedback" class="mt-3 text-center font-semibold hidden text-sm"></div>
                         </div>
-                    </div>
-                    
-                    <div id="status-display-container" class="absolute top-3 right-3 z-10 hidden">
-                        <div class="relative w-[90px] h-[45px]">
-                            <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
-                            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
-                                <path id="timer-progress-bar"
-                                      d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 10,2 L 45,2"
-                                      fill="none" stroke="#3b82f6" stroke-width="4"
-                                      style="transition: stroke-dashoffset 0.1s linear;"/>
-                            </svg>
-                            <div id="timer-display" class="relative w-full h-full flex items-center justify-center text-blue-900 font-bold text-xl">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-11/12 sm:w-2/3 max-w-lg z-10 text-center">
-                         <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl w-full">Start Quiz</button>
-                         <div class="relative flex items-center gap-2">
-                            <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
-                            <button id="learn-btn" class="hidden bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition shadow-md text-lg w-auto whitespace-nowrap">Explore</button>
-                            <div id="points-indicator"></div>
-                         </div>
                     </div>
                 </div>
 
