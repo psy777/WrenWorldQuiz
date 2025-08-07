@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Map Quiz</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .map-container { position: relative; }
+        #map {
+            height: 65vh;
+            width: 100%;
+            border-radius: 0.5rem;
+            z-index: 1;
+        }
+        .leaflet-container { background: var(--map-bg-color, #a2d2ff); }
+        #score-modal, #info-modal { z-index: 1001; }
+        .permanent-tooltip {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-weight: bold;
+            color: #1e3a8a;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        #settings-panel.disabled, .setting-control button.disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .combo-heat-max {
+            color: #ef4444;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        #points-indicator {
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: white;
+            opacity: 0;
+            transition: all 0.5s ease-out;
+            pointer-events: none;
+        }
+        #points-indicator.show {
+            bottom: 150%;
+            opacity: 1;
+        }
+        .setting-control button {
+            transition: all 0.2s ease-in-out;
+        }
+        #country-guess-input:read-only {
+            background-color: #e9ecef;
+            cursor: default;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4 transition-colors duration-300">
+
+    <div id="main-container" class="w-full max-w-6xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-2xl border border-gray-200 transition-colors duration-300">
+        <header class="text-center mb-4 relative">
+            <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
+            <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Configure your settings and press Start!</p>
+            <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
+            <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
+        </header>
+
+        <div class="map-container mb-6">
+            <div id="map" class="shadow-lg border-2 border-blue-900"></div>
+            
+            <div id="status-display-container" class="absolute top-3 left-3 z-10 hidden">
+                <div class="relative w-[90px] h-[45px]">
+                    <div class="absolute inset-0 bg-white bg-opacity-90 rounded-lg shadow-md"></div>
+                    <svg class="absolute inset-0 w-full h-full" viewBox="0 0 90 45">
+                        <path id="timer-progress-bar"
+                              d="M 45,2 L 80,2 A 8,8 0 0 1 88,10 L 88,35 A 8,8 0 0 1 80,43 L 10,43 A 8,8 0 0 1 2,35 L 2,10 A 8,8 0 0 1 10,2 L 45,2"
+                              fill="none" stroke="#3b82f6" stroke-width="4"
+                              style="transition: stroke-dashoffset 0.1s linear;"/>
+                    </svg>
+                    <div id="timer-display" class="relative w-full h-full flex items-center justify-center text-blue-900 font-bold text-xl">
+                    </div>
+                </div>
+            </div>
+
+            <div id="quiz-controls-container" class="absolute bottom-5 left-1/2 -translate-x-1/2 w-11/12 sm:w-1/2 max-w-md z-10 text-center">
+                 <button id="start-quiz-btn" class="bg-blue-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-blue-700 transition shadow-md text-xl w-full">Start Quiz</button>
+                 <div class="relative">
+                    <input type="text" id="country-guess-input" placeholder="Type country name..." class="hidden w-full px-5 py-3 border-2 border-blue-300 rounded-full shadow-lg focus:ring-4 focus:ring-blue-400 focus:outline-none transition text-center text-lg">
+                    <div id="points-indicator"></div>
+                 </div>
+            </div>
+        </div>
+
+        <div id="settings-panel" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 bg-gray-50 p-6 rounded-lg shadow-inner transition-colors duration-300">
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Play Style</h3>
+                    <svg data-setting="playStyle" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="play-style-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="zen" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Zen</button>
+                    <button data-value="timed" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Timed</button>
+                    <button data-value="paced" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Paced</button>
+                    <button data-value="sprint" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Sprint</button>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Tab Order</h3>
+                    <svg data-setting="tabOrder" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="tab-order-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="random" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Random</button>
+                    <button data-value="alphabetical" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Alphabetical</button>
+                    <button data-value="path" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Path</button>
+                </div>
+            </div>
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Difficulty</h3>
+                    <svg data-setting="difficulty" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="difficulty-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="easy" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Easy</button>
+                    <button data-value="normal" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Normal</button>
+                    <button data-value="hard" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Hard</button>
+                    <button data-value="extreme" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Extreme</button>
+                    <button data-value="mirror" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Mirror</button>
+                </div>
+            </div>
+             <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <h3 class="setting-title text-lg font-semibold text-gray-700">Theme</h3>
+                    <svg data-setting="theme" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                </div>
+                <div id="theme-options" class="setting-control flex p-1 rounded-lg">
+                    <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
+                    <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
+                    <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
+                    <button data-value="oceanic" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Oceanic</button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-6 text-center">
+             <button id="finish-attempt-btn" class="bg-green-600 text-white font-semibold py-3 px-8 rounded-lg hover:bg-green-700 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed w-full md:w-auto">Finish & Score</button>
+        </div>
+    </div>
+
+    <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
+        <div id="score-modal-content" class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full text-center transform transition-all scale-95 opacity-0">
+            <h2 class="text-4xl font-bold text-blue-900 mb-4" id="score-title">Your Score</h2>
+            <p class="text-8xl font-bold text-green-500 mb-2" id="final-score"></p>
+            <p class="text-2xl font-semibold text-gray-700 mb-2" id="final-total-score-display"></p>
+            <p class="text-lg text-gray-500 mb-4" id="final-time-display"></p>
+            <p class="text-lg text-gray-600 mb-6" id="score-details"></p>
+            <div id="results-list" class="text-left max-h-60 overflow-y-auto mb-6 border border-gray-200 rounded-lg p-4">
+                <h3 class="font-bold text-lg mb-2 text-red-700">Missed Answers:</h3>
+                <div id="misses-container"></div>
+            </div>
+            <div class="flex flex-wrap justify-center items-center gap-4">
+                <button id="close-modal-btn" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition shadow-md">Play Again</button>
+                <button id="view-finished-map-btn" class="bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition shadow-md">View Finished Map</button>
+                <a href="https://ko-fi.com/ohasa" target="_blank" rel="noopener noreferrer" class="inline-block bg-pink-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-pink-600 transition shadow-md">Like this quiz? Buy me a coffee!</a>
+            </div>
+        </div>
+    </div>
+    
+    <div id="info-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center p-4">
+        <div id="info-modal-content" class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full text-left transform transition-all scale-95 opacity-100 relative">
+            <button id="close-info-modal-btn" class="absolute top-2 right-2 text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <h3 id="info-modal-title" class="text-2xl font-bold text-gray-800 mb-4">Setting Info</h3>
+            <div id="info-modal-body" class="text-gray-600 space-y-3"></div>
+        </div>
+    </div>
+
+    <footer class="text-center py-4">
+        <p class="text-gray-600 text-sm">
+            Enjoying the quiz? 
+            <a href="https://ko-fi.com/ohasa" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:underline">
+                Buy me a coffee!
+            </a>
+        </p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- MAP AND UI SETUP ---
+            let currentTileLayer = null;
+            const map = L.map('map', { preferCanvas: true, zoomControl: false, worldCopyJump: true }).setView([20, 0], 2);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+            let tooltipLayerGroup = L.layerGroup().addTo(map);
+
+            // --- STATE VARIABLES ---
+            let geoJsonLayer, selectedCountryLayer = null, timerInterval = null, hintRevealInterval = null;
+            let userAnswers = {}, countryData = {}, allCountries = [], countryPath = [];
+            let quizState = 'pre-start'; // 'pre-start', 'playing', 'finished'
+            let playStyle = 'timed'; // 'zen', 'timed', 'paced', 'sprint'
+            let tabOrder = 'random';
+            let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme', 'mirror'
+            let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'oceanic'
+            let quizSequence = [];
+            let currentSequenceIndex = -1;
+            
+            // --- SCORING AND COMBO STATE ---
+            let score = 0;
+            let comboCount = 0;
+            let comboMultiplier = 1;
+            let countrySelectedTimestamp = 0;
+            let comboTimerInterval = null;
+            const COMBO_DURATION = 5000; // 5 seconds for a combo in Sprint mode
+            const PACED_DURATION = 15; // 15 seconds per country in Paced mode
+
+            // --- TIMER STATE ---
+            let quizStartTime = 0;
+            let zenTimeElapsed = 0;
+            let timeRemaining;
+
+            // --- MIRROR MODE STATE ---
+            let mirrorTries = 4;
+
+            // --- COUNTRY DATA, ALIASES, AND PATH ---
+            const countryNameCorrections = { "Dem. Rep. Congo": "Democratic Republic of the Congo", "Central African Rep.": "Central African Republic", "Dominican Rep.": "Dominican Republic", "Eq. Guinea": "Equatorial Guinea", "Bosnia and Herz.": "Bosnia and Herzegovina", "S. Sudan": "South Sudan", "W. Sahara": "Western Sahara", "Solomon Is.": "Solomon Islands", "Antigua and Barb.": "Antigua and Barbuda", "St. Kitts and Nevis": "Saint Kitts and Nevis", "St. Lucia": "Saint Lucia", "St. Vin. and Gren.": "Saint Vincent and the Grenadines", "Swaziland": "Eswatini", "United Republic of Tanzania": "Tanzania", "Côte d'Ivoire": "Ivory Coast" };
+            const countryBundles = { "Greenland": "Denmark", "Western Sahara": "Morocco", "Somaliland": "Somalia", "Northern Cyprus": "Cyprus", "West Bank": "Israel", "Puerto Rico": "United States of America", "French Guiana": "France", "Democratic Republic of the Congo": "Republic of the Congo", "Bermuda": "United States of America"};
+            const bundledCountries = Object.keys(countryBundles);
+            
+            const countryAliases = {
+                'usa': 'unitedstatesofamerica', 'car': 'centralafricanrepublic', 'uae': 'unitedarabemirates',
+                'uk': 'unitedkingdom', 'trinidad': 'trinidadandtobago', 'newguinea': 'papuanewguinea',
+                'fasal': 'frenchsouthernandantarcticlands', 'antigua': 'antiguaandbarbuda',
+                'saintkitts': 'saintkittsandnevis', 'saintvincent': 'saintvincentandthegrenadines',
+                'bahamas': 'thebahamas', 'falklandislands': 'falklandislands(malvinas)',
+                'easttimor': 'timorleste', 'northmacedonia': 'macedonia', 'serbia': 'republicofserbia', 'czechia': 'czechrepublic', 'bosnia': 'bosniaandherzegovina'
+            };
+            const specialCases = { 'congo': ['democraticrepublicofthecongo', 'republicofthecongo'] };
+
+            const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paray uruguay argentina chile falklandislands Iceland ireland uk Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany denmark netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman uae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
+
+            // --- DOM ELEMENTS ---
+            const guessInput = document.getElementById('country-guess-input');
+            const finishAttemptBtn = document.getElementById('finish-attempt-btn');
+            const scoreModal = document.getElementById('score-modal');
+            const finalScoreDisplay = document.getElementById('final-score');
+            const finalTotalScoreDisplay = document.getElementById('final-total-score-display');
+            const finalTimeDisplay = document.getElementById('final-time-display');
+            const scoreDetailsDisplay = document.getElementById('score-details');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            const missesContainer = document.getElementById('misses-container');
+            const viewFinishedMapBtn = document.getElementById('view-finished-map-btn');
+            const backToQuizBtn = document.getElementById('back-to-quiz-btn');
+            const subtitle = document.getElementById('subtitle');
+            const statusDisplayContainer = document.getElementById('status-display-container');
+            const timerDisplay = document.getElementById('timer-display');
+            const timerProgressBar = document.getElementById('timer-progress-bar');
+            const scoreTitle = document.getElementById('score-title');
+            const playStyleOptions = document.getElementById('play-style-options');
+            const tabOrderOptions = document.getElementById('tab-order-options');
+            const difficultyOptions = document.getElementById('difficulty-options');
+            const themeOptions = document.getElementById('theme-options');
+            const startQuizBtn = document.getElementById('start-quiz-btn');
+            const settingsPanel = document.getElementById('settings-panel');
+            const scoreDisplay = document.getElementById('score-display');
+            const pointsIndicator = document.getElementById('points-indicator');
+            const infoModal = document.getElementById('info-modal');
+            const infoModalTitle = document.getElementById('info-modal-title');
+            const infoModalBody = document.getElementById('info-modal-body');
+            const closeInfoModalBtn = document.getElementById('close-info-modal-btn');
+
+            // --- SVG TIMER SETUP ---
+            let progressBarLength; 
+            finishAttemptBtn.style.display = 'none';
+            
+            // --- BIOME DATA ---
+            const countryBiomes = {
+                'egypt': 'desert', 'libya': 'desert', 'algeria': 'desert', 'niger': 'desert', 'mali': 'desert', 'mauritania': 'desert', 'chad': 'desert', 'sudan': 'desert', 'saudiarabia': 'desert', 'yemen': 'desert', 'oman': 'desert', 'unitedarabemirates': 'desert', 'qatar': 'desert', 'kuwait': 'desert', 'jordan': 'desert', 'iraq': 'desert', 'iran': 'desert', 'afghanistan': 'desert', 'pakistan': 'desert', 'australia': 'desert', 'namibia': 'desert', 'botswana': 'desert', 'westernsahara': 'desert', 'turkmenistan': 'desert', 'uzbekistan': 'desert',
+                'brazil': 'rainforest', 'colombia': 'rainforest', 'peru': 'rainforest', 'ecuador': 'rainforest', 'bolivia': 'rainforest', 'venezuela': 'rainforest', 'guyana': 'rainforest', 'suriname': 'rainforest', 'frenchguiana': 'rainforest', 'panama': 'rainforest', 'costarica': 'rainforest', 'nicaragua': 'rainforest', 'honduras': 'rainforest', 'guatemala': 'rainforest', 'belize': 'rainforest', 'democraticrepublicofthecongo': 'rainforest', 'republicofthecongo': 'rainforest', 'gabon': 'rainforest', 'equatorialguinea': 'rainforest', 'cameroon': 'rainforest', 'centralafricanrepublic': 'rainforest', 'indonesia': 'rainforest', 'malaysia': 'rainforest', 'papuanewguinea': 'rainforest', 'philippines': 'rainforest', 'thailand': 'rainforest', 'vietnam': 'rainforest', 'laos': 'rainforest', 'cambodia': 'rainforest', 'srilanka': 'rainforest', 'madagascar': 'rainforest', 'ivorycoast': 'rainforest', 'ghana': 'rainforest', 'nigeria': 'rainforest',
+                'canada': 'forest', 'russia': 'forest', 'finland': 'forest', 'sweden': 'forest', 'norway': 'forest', 'japan': 'forest',
+                'unitedstatesofamerica': 'temperate', 'mexico': 'temperate', 'china': 'temperate', 'india': 'temperate', 'argentina': 'temperate', 'chile': 'temperate', 'southafrica': 'temperate', 'newzealand': 'temperate', 'unitedkingdom': 'temperate', 'ireland': 'temperate', 'france': 'temperate', 'germany': 'temperate', 'poland': 'temperate', 'spain': 'temperate', 'portugal': 'temperate', 'italy': 'temperate', 'greece': 'temperate', 'turkey': 'temperate', 'ukraine': 'temperate', 'romania': 'temperate', 'southkorea': 'temperate', 'northkorea': 'temperate', 'uruguay': 'temperate', 'paraguay': 'temperate', 'hungary': 'temperate', 'austria': 'temperate', 'switzerland': 'temperate', 'belgium': 'temperate', 'netherlands': 'temperate', 'denmark': 'temperate', 'czechrepublic': 'temperate', 'slovakia': 'temperate',
+                'iceland': 'tundra', 'greenland': 'tundra'
+            };
+
+            function getCountryBiome(countryName) {
+                return countryBiomes[normalize(countryName)] || 'temperate';
+            }
+
+            // --- THEME DATA ---
+            const themes = {
+                voyager: {
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#a2d2ff',
+                    styles: {
+                        default: { fillColor: '#60a5fa', weight: 1, color: '#1e3a8a', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#22c55e', weight: 1, color: '#166534', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#f59e0b', fillColor: '#facc15' },
+                        correctFinished: { fillColor: '#22c55e', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#ef4444', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#e5e7eb', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
+                    },
+                    classes: { body: "bg-gray-100", container: "bg-white", title: "text-blue-900", settings: "bg-gray-50", settingTitle: "text-gray-700", settingRail: "bg-gray-200", settingInactive: "text-gray-500", settingActive: "bg-white text-gray-800 shadow" }
+                },
+                midnight: {
+                    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#111827',
+                    styles: {
+                        default: { fillColor: '#6366f1', weight: 1, color: '#a5b4fc', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#16a34a', weight: 1, color: '#86efac', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#f97316', fillColor: '#fdba74' },
+                        correctFinished: { fillColor: '#16a34a', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#dc2626', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#374151', weight: 1, color: '#6b7280', fillOpacity: 0.5 },
+                    },
+                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-400", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
+                },
+                earth: {
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    mapBg: '#a2d2ff',
+                    styles: {
+                        default: { fillColor: '#eeeee4', weight: 1, color: '#422006', fillOpacity: 0.7 },
+                        selected: { weight: 4, color: '#ca8a04', fillColor: '#fef08a' },
+                        incorrectFinished: { fillColor: '#b91c1c', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#d6d3d1', weight: 1, color: '#a8a29e', fillOpacity: 0.5 },
+                        
+                        guessed_desert: { fillColor: '#f4a460', weight: 1, color: '#8b4513', fillOpacity: 0.8 }, // Sandy Brown
+                        guessed_rainforest: { fillColor: '#2e8b57', weight: 1, color: '#006400', fillOpacity: 0.8 }, // Sea Green
+                        guessed_forest: { fillColor: '#228b22', weight: 1, color: '#006400', fillOpacity: 0.8 }, // Forest Green
+                        guessed_temperate: { fillColor: '#6b8e23', weight: 1, color: '#556b2f', fillOpacity: 0.8 }, // Olive Drab
+                        guessed_tundra: { fillColor: '#add8e6', weight: 1, color: '#4682b4', fillOpacity: 0.8 }, // Light Blue
+                        
+                        correctFinished_desert: { fillColor: '#f4a460', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_rainforest: { fillColor: '#2e8b57', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_forest: { fillColor: '#228b22', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_temperate: { fillColor: '#6b8e23', weight: 1, color: 'white', fillOpacity: 0.7 },
+                        correctFinished_tundra: { fillColor: '#add8e6', weight: 1, color: 'black', fillOpacity: 0.7 },
+                    },
+                    classes: { body: "bg-stone-300", container: "bg-stone-100", title: "text-yellow-900", settings: "bg-stone-200", settingTitle: "text-stone-700", settingRail: "bg-stone-300", settingInactive: "text-stone-500", settingActive: "bg-stone-50 text-stone-800 shadow" }
+                },
+                oceanic: {
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
+                    attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
+                    mapBg: '#005f73',
+                    styles: {
+                        default: { fillColor: '#2a9d8f', weight: 1, color: '#e9d8a6', fillOpacity: 0.7 },
+                        guessed: { fillColor: '#94d2bd', weight: 1, color: '#e9d8a6', fillOpacity: 0.8 },
+                        selected: { weight: 4, color: '#ee9b00', fillColor: '#fefae0' },
+                        correctFinished: { fillColor: '#94d2bd', weight: 1, color: 'black', fillOpacity: 0.9 },
+                        incorrectFinished: { fillColor: '#ae2012', weight: 1, color: 'white', fillOpacity: 0.9 },
+                        unclickable: { fillColor: '#bbdef0', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
+                    },
+                     classes: { body: "bg-cyan-100", container: "bg-cyan-50", title: "text-cyan-900", settings: "bg-cyan-100", settingTitle: "text-cyan-800", settingRail: "bg-cyan-200", settingInactive: "text-cyan-700", settingActive: "bg-white text-orange-600 shadow" }
+                }
+            };
+            
+            // --- UTILITY FUNCTIONS ---
+            function normalize(str) { return str.toLowerCase().replace(/[\s\.\-&'â]/g, ''); }
+
+            function getVisualCenter(layer) {
+                const feature = layer.feature;
+                let center = layer.getBounds().getCenter(); 
+                if (feature.geometry.type === 'MultiPolygon') {
+                    let largestArea = 0;
+                    let bestCenter = center;
+                    feature.geometry.coordinates.forEach(polygonGroup => {
+                        const outerBoundary = polygonGroup[0];
+                        const latLngs = outerBoundary.map(coord => [coord[1], coord[0]]); 
+                        const tempPolygon = L.polygon(latLngs);
+                        const bounds = tempPolygon.getBounds();
+                        const area = (bounds.getNorth() - bounds.getSouth()) * (bounds.getEast() - bounds.getWest());
+                        if (area > largestArea) {
+                            largestArea = area;
+                            bestCenter = bounds.getCenter();
+                        }
+                    });
+                    center = bestCenter;
+                }
+                return center;
+            }
+
+            // --- DATA FETCHING AND INITIALIZATION ---
+            fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+                .then(res => res.json())
+                .then(geoData => {
+                    geoData.features.forEach(feature => {
+                        const originalName = feature.properties.name;
+                        if (countryNameCorrections.hasOwnProperty(originalName)) {
+                            feature.properties.name = countryNameCorrections[originalName];
+                        }
+                    });
+                    geoData.features = geoData.features.filter(feature => feature.properties.name);
+
+                    geoJsonLayer = L.geoJson(geoData, {
+                        style: () => themes[theme].styles.default,
+                        onEachFeature: onEachFeature
+                    }).addTo(map);
+                    
+                    allCountries = geoData.features
+                        .map(feature => {
+                            const name = feature.properties.name;
+                            if (name === 'Antarctica' || bundledCountries.includes(name)) return null;
+                            const layer = countryData[name];
+                            return layer ? { name, layer, normalized: normalize(name) } : null;
+                        })
+                        .filter(Boolean);
+
+                    allCountries.sort((a, b) => a.name.localeCompare(b.name));
+                    countryPath = pathData.toLowerCase().split(/\s+/);
+                    applyTheme(theme, true); // Apply default theme on load
+                    updateTimerDisplay();
+                });
+
+            // --- THEME LOGIC ---
+            function applyTheme(newThemeName, isInitial = false) {
+                const oldThemeName = theme;
+                theme = newThemeName;
+                const themeData = themes[theme];
+
+                if (currentTileLayer) map.removeLayer(currentTileLayer);
+                currentTileLayer = L.tileLayer(themeData.url, {
+                    attribution: themeData.attribution,
+                    subdomains: 'abcd', maxZoom: 10, minZoom: 2,
+                }).addTo(map);
+                
+                document.documentElement.style.setProperty('--map-bg-color', themeData.mapBg);
+                updateThemeClasses(themes[oldThemeName].classes, themeData.classes, isInitial);
+
+                if (geoJsonLayer) {
+                    geoJsonLayer.eachLayer(layer => {
+                        const name = layer.feature.properties.name;
+                        let styleKey;
+
+                        if (quizState === 'finished') {
+                            const isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
+                            if (isGuessed) {
+                                if (theme === 'earth') {
+                                    const biome = getCountryBiome(name);
+                                    styleKey = `correctFinished_${biome}`;
+                                } else {
+                                    styleKey = 'correctFinished';
+                                }
+                            } else {
+                                styleKey = 'incorrectFinished';
+                            }
+                        } else if (layer === selectedCountryLayer && difficulty !== 'mirror') {
+                            styleKey = 'selected';
+                        } else if (userAnswers[name]) {
+                             if (theme === 'earth') {
+                                const biome = getCountryBiome(name);
+                                styleKey = `guessed_${biome}`;
+                            } else {
+                                styleKey = 'guessed';
+                            }
+                        } else if (name === 'Antarctica') {
+                            styleKey = 'unclickable';
+                        } else {
+                            styleKey = 'default';
+                        }
+                        layer.setStyle(getStyle(styleKey));
+                    });
+                }
+            }
+            
+            function updateThemeClasses(oldClasses, newClasses, isInitial) {
+                 const classMap = {
+                    'body': document.body, 'container': document.getElementById('main-container'),
+                    'title': document.getElementById('main-title'), 'settings': document.getElementById('settings-panel'),
+                    'score-modal-content': document.getElementById('score-modal-content'),
+                    'info-modal-content': document.getElementById('info-modal-content')
+                };
+
+                Object.keys(classMap).forEach(key => {
+                    if (oldClasses[key] && newClasses[key]) {
+                        classMap[key].classList.remove(...oldClasses[key].split(' '));
+                        classMap[key].classList.add(...newClasses[key].split(' '));
+                    }
+                });
+                
+                document.querySelectorAll('.setting-title').forEach(el => {
+                    el.classList.remove(...oldClasses.settingTitle.split(' '));
+                    el.classList.add(...newClasses.settingTitle.split(' '));
+                });
+
+                document.querySelectorAll('.setting-control').forEach(el => {
+                    el.classList.remove(...oldClasses.settingRail.split(' '));
+                    el.classList.add(...newClasses.settingRail.split(' '));
+                    
+                    el.querySelectorAll('button').forEach(btn => {
+                        if (isInitial) { // On first load, set initial classes
+                            if(btn.classList.contains('active')) {
+                                btn.classList.add(...newClasses.settingActive.split(' '));
+                            } else {
+                                btn.classList.add(...newClasses.settingInactive.split(' '));
+                            }
+                        } else { // On theme change, swap classes
+                            if(btn.classList.contains('active')) {
+                                btn.classList.remove(...oldClasses.settingActive.split(' '));
+                                btn.classList.add(...newClasses.settingActive.split(' '));
+                            } else {
+                                btn.classList.remove(...oldClasses.settingInactive.split(' '));
+                                btn.classList.add(...newClasses.settingInactive.split(' '));
+                            }
+                        }
+                    });
+                });
+            }
+
+            // --- STYLING FUNCTIONS ---
+            function getStyle(styleName) { 
+                const style = themes[theme].styles[styleName];
+                // Fallback for biome styles if one doesn't exist
+                if (!style && styleName.includes('_')) {
+                    const baseStyle = styleName.split('_')[0];
+                    return themes[theme].styles[`${baseStyle}_temperate`] || themes[theme].styles['guessed'];
+                }
+                return style;
+            }
+
+            // --- MAP INTERACTION LOGIC ---
+            function getMainLayer(layer) {
+                const name = layer.feature.properties.name;
+                const parentName = countryBundles[name];
+                return (parentName && countryData[parentName]) ? countryData[parentName] : layer;
+            }
+
+            function onEachFeature(feature, layer) {
+                const name = feature.properties.name;
+                countryData[name] = layer;
+                if (name === 'Antarctica') {
+                    layer.setStyle(getStyle('unclickable'));
+                    return;
+                }
+                layer.on({
+                    mouseover: e => { if (quizState === 'playing' && difficulty !== 'mirror') highlightFeature(getMainLayer(e.target)); },
+                    mouseout: e => { if (quizState === 'playing' && difficulty !== 'mirror') resetHighlight(getMainLayer(e.target)); },
+                    click: e => {
+                        if (quizState !== 'playing') return;
+                        const mainLayer = getMainLayer(e.target);
+                        if (difficulty === 'mirror') {
+                            handleMirrorModeClick(mainLayer);
+                        } else {
+                            selectCountry(mainLayer);
+                        }
+                    }
+                });
+            }
+            
+            function handleMirrorModeClick(clickedLayer) {
+                const clickedName = clickedLayer.feature.properties.name;
+                if (userAnswers[clickedName]) return; 
+
+                const correctName = quizSequence[currentSequenceIndex].name;
+
+                if (clickedName === correctName) {
+                    // Correct Guess
+                    userAnswers[correctName] = true;
+                    if (playStyle === 'timed') {
+                        timeRemaining += 2;
+                        updateTimerDisplay();
+                    }
+                    if (playStyle === 'sprint') processCorrectGuessForCombo(clickedName, correctName);
+                    
+                    let styleKey;
+                    if (theme === 'earth') {
+                        const biome = getCountryBiome(clickedName);
+                        styleKey = `guessed_${biome}`;
+                    } else {
+                        styleKey = 'guessed';
+                    }
+                    const style = getStyle(styleKey);
+                    clickedLayer.setStyle(style);
+                    getRelatedLayers(clickedLayer).forEach(l => l.setStyle(style));
+                    
+                    const allGuessed = Object.keys(userAnswers).length === allCountries.length;
+                    if (allGuessed) {
+                        finishQuiz('manual');
+                    } else {
+                        if (playStyle === 'paced') startPacedTimer(true); // Reset and move to next
+                        else promptNextMirrorCountry();
+                    }
+                } else {
+                    // Incorrect Guess
+                    mirrorTries--;
+                    if (mirrorTries <= 0) {
+                        // Out of tries: Reveal the correct answer and move on.
+                        const correctLayer = countryData[correctName];
+                        if (correctLayer) {
+                            smartFitBounds(correctLayer);
+                            correctLayer.setStyle(getStyle('incorrectFinished'));
+                        }
+                        
+                        setTimeout(() => {
+                            if (playStyle === 'paced') {
+                                startPacedTimer(true);
+                            } else {
+                                promptNextMirrorCountry();
+                            }
+                        }, 1500); // Wait 1.5 seconds to show the user the correct country
+                    }
+                }
+            }
+
+            function getRelatedLayers(layer) {
+                const name = layer.feature.properties.name;
+                const related = [];
+                const childrenNames = Object.keys(countryBundles).filter(key => countryBundles[key] === name);
+                childrenNames.forEach(childName => countryData[childName] && related.push(countryData[childName]));
+                return related;
+            }
+
+            function highlightFeature(layer) {
+                if (userAnswers[layer.feature.properties.name] || layer === selectedCountryLayer) return;
+                const style = { weight: 3, color: getStyle('selected').color };
+                layer.setStyle(style);
+                getRelatedLayers(layer).forEach(l => l.setStyle(style));
+                layer.bringToFront();
+            }
+
+            function resetHighlight(layer) {
+                // If the country has already been guessed correctly, do nothing.
+                if (userAnswers[layer.feature.properties.name]) return;
+                
+                // Otherwise, reset its style to the default.
+                const style = getStyle('default');
+                layer.setStyle(style);
+                getRelatedLayers(layer).forEach(l => l.setStyle(style));
+            }
+            
+            function selectCountry(layer) {
+                if (!layer || userAnswers[layer.feature.properties.name]) return;
+                clearInterval(hintRevealInterval);
+
+                if (selectedCountryLayer && !userAnswers[selectedCountryLayer.feature.properties.name]) {
+                    resetHighlight(selectedCountryLayer);
+                }
+                selectedCountryLayer = layer;
+                selectedCountryLayer.setStyle(getStyle('selected'));
+                getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle('selected')));
+                selectedCountryLayer.bringToFront();
+                guessInput.value = '';
+                guessInput.focus();
+                
+                updateHintDisplay();
+                countrySelectedTimestamp = Date.now();
+                if (playStyle === 'paced') startPacedTimer();
+            }
+
+            function updateHintDisplay() {
+                const name = selectedCountryLayer.feature.properties.name;
+                let placeholder = '';
+
+                switch (difficulty) {
+                    case 'easy':
+                        let revealed = name.split('').map((c) => c === ' ' ? ' ' : '_ ');
+                        let unrevealedIndices = [];
+                        for(let i=1; i < name.length; i++) {
+                            if (name[i] !== ' ') unrevealedIndices.push(i);
+                        }
+                        revealed[0] = name[0];
+                        placeholder = `${revealed.join('')} (${name.length} letters)`;
+                        guessInput.placeholder = placeholder;
+                        
+                        hintRevealInterval = setInterval(() => {
+                            if (unrevealedIndices.length > 0) {
+                                const randomIndex = Math.floor(Math.random() * unrevealedIndices.length);
+                                const indexToReveal = unrevealedIndices.splice(randomIndex, 1)[0];
+                                revealed[indexToReveal] = name[indexToReveal];
+                                guessInput.placeholder = `${revealed.join('')} (${name.length} letters)`;
+                            } else {
+                                clearInterval(hintRevealInterval);
+                            }
+                        }, 3000);
+                        break;
+                    case 'normal':
+                        placeholder = name[0] + name.slice(1).replace(/[a-zA-Z]/g, '_ ');
+                        guessInput.placeholder = placeholder;
+                        break;
+                    case 'hard':
+                        placeholder = name.replace(/[a-zA-Z]/g, '_ ');
+                        guessInput.placeholder = placeholder;
+                        break;
+                    case 'extreme':
+                        guessInput.placeholder = `Guess the selected country...`;
+                        break;
+                }
+            }
+
+
+            function smartFitBounds(layer) {
+                const bounds = layer.getBounds();
+                const lonSpan = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
+                const countryName = layer.feature.properties.name;
+
+                if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
+                else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
+                else {
+                    const latSpan = bounds.getNorth() - bounds.getSouth();
+                    const lngSpan = bounds.getEast() - bounds.getWest();
+                    const size = latSpan * lngSpan;
+                    let maxZoomLevel = 4;
+                    if (size < 50) maxZoomLevel = 5;
+                    if (size < 5) maxZoomLevel = 6;
+                    map.fitBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
+                }
+            }
+            
+            function selectNextCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex + 1) % quizSequence.length;
+                    const nextCountry = quizSequence[currentSequenceIndex];
+                    if (!userAnswers[nextCountry.name]) {
+                        selectCountry(nextCountry.layer);
+                        smartFitBounds(nextCountry.layer);
+                        return;
+                    }
+                }
+                finishQuiz('manual');
+            }
+            
+            function promptNextMirrorCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex + 1) % quizSequence.length;
+                    const nextCountry = quizSequence[currentSequenceIndex];
+                    if (!userAnswers[nextCountry.name] && (!countryData[nextCountry.name].options || countryData[nextCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
+                        guessInput.value = `Click on: ${nextCountry.name}`;
+                        
+                        // --- TEXT TO SPEECH ---
+                        if (window.speechSynthesis) {
+                            window.speechSynthesis.cancel(); // Stop any previous speech
+                            const utterance = new SpeechSynthesisUtterance(nextCountry.name);
+                            window.speechSynthesis.speak(utterance);
+                        }
+                        // --- END TEXT TO SPEECH ---
+
+                        mirrorTries = 4;
+                        countrySelectedTimestamp = Date.now();
+                        return;
+                    }
+                }
+                finishQuiz('manual'); // All countries are either guessed or missed
+            }
+            
+            function promptPreviousMirrorCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex - 1 + quizSequence.length) % quizSequence.length;
+                    const prevCountry = quizSequence[currentSequenceIndex];
+                     if (!userAnswers[prevCountry.name] && (!countryData[prevCountry.name].options || countryData[prevCountry.name].options.fillColor !== getStyle('incorrectFinished').fillColor)) {
+                        guessInput.value = `Click on: ${prevCountry.name}`;
+                        
+                        // --- TEXT TO SPEECH ---
+                        if (window.speechSynthesis) {
+                           window.speechSynthesis.cancel(); // Stop any previous speech
+                           const utterance = new SpeechSynthesisUtterance(prevCountry.name);
+                           window.speechSynthesis.speak(utterance);
+                        }
+                        // --- END TEXT TO SPEECH ---
+
+                        mirrorTries = 4;
+                        countrySelectedTimestamp = Date.now();
+                        return;
+                    }
+                }
+                finishQuiz('manual');
+            }
+
+            function selectPreviousCountry() {
+                for (let i = 0; i < quizSequence.length; i++) {
+                    currentSequenceIndex = (currentSequenceIndex - 1 + quizSequence.length) % quizSequence.length;
+                    const prevCountry = quizSequence[currentSequenceIndex];
+                    if (!userAnswers[prevCountry.name]) {
+                        selectCountry(prevCountry.layer);
+                        smartFitBounds(prevCountry.layer);
+                        return;
+                    }
+                }
+                finishQuiz('manual');
+            }
+
+            // --- FUZZY SEARCH AND GUESSING LOGIC ---
+            function levenshtein(s1, s2) {
+                if (!s1 || !s2) return (s1 || s2).length;
+                const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+                for (let i = 0; i <= s1.length; i += 1) matrix[0][i] = i;
+                for (let j = 0; j <= s2.length; j += 1) matrix[j][0] = j;
+                for (let j = 1; j <= s2.length; j += 1) {
+                    for (let i = 1; i <= s1.length; i += 1) {
+                        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+                        matrix[j][i] = Math.min(matrix[j][i - 1] + 1, matrix[j - 1][i] + 1, matrix[j - 1][i - 1] + indicator);
+                    }
+                }
+                return matrix[s2.length][s1.length];
+            }
+            
+            function isGuessCorrect(guess, correctCountryName) {
+                const normalizedGuess = normalize(guess);
+                if (!normalizedGuess) return false;
+                const normalizedCorrect = normalize(correctCountryName);
+
+                if (normalizedGuess === normalizedCorrect) return true;
+                if (countryAliases[normalizedGuess] === normalizedCorrect) return true;
+                if (specialCases[normalizedGuess] && specialCases[normalizedGuess].includes(normalizedCorrect)) return true;
+                
+                const distance = levenshtein(normalizedGuess, normalizedCorrect);
+                let threshold = (normalizedCorrect.length >= 10) ? 2 : (normalizedCorrect.length >= 5 ? 1 : 0);
+                
+                const isFuzzyMatch = distance <= threshold;
+
+                if (isFuzzyMatch) {
+                    if (distance > 0 && normalizedGuess.slice(-1) !== normalizedCorrect.slice(-1)) {
+                        return false;
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            guessInput.addEventListener('input', () => {
+                if (difficulty === 'mirror' || !selectedCountryLayer) return;
+                const guess = guessInput.value;
+                const correctName = selectedCountryLayer.feature.properties.name;
+                
+                if (isGuessCorrect(guess, correctName)) {
+                    if (userAnswers[correctName]) return;
+
+                    clearInterval(hintRevealInterval);
+                    userAnswers[correctName] = true;
+                    if (playStyle === 'sprint') processCorrectGuessForCombo(guess, correctName);
+                    
+                    let styleKey;
+                    if (theme === 'earth') {
+                        const biome = getCountryBiome(correctName);
+                        styleKey = `guessed_${biome}`;
+                    } else {
+                        styleKey = 'guessed';
+                    }
+                    const style = getStyle(styleKey);
+                    selectedCountryLayer.setStyle(style);
+                    getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(style));
+
+                    finishAttemptBtn.disabled = false;
+                    guessInput.value = '';
+                    guessInput.placeholder = `Correct!`;
+                    
+                    setTimeout(() => {
+                        if (playStyle === 'paced') startPacedTimer(true);
+                        else selectNextCountry();
+                    }, 500);
+                }
+            });
+
+            // --- SCORING AND COMBO LOGIC ---
+            function processCorrectGuessForCombo(guess, correctName) {
+                clearInterval(comboTimerInterval);
+                comboCount++;
+                updateComboMeter();
+                handleScoring(guess, correctName);
+                startComboTimer();
+            }
+
+            function handleScoring(guess, correctName) {
+                const basePoints = 100;
+                let accuracyBonus = 50;
+                if (difficulty !== 'mirror') {
+                    accuracyBonus = Math.max(0, (correctName.length - levenshtein(normalize(guess), normalize(correctName))) / correctName.length) * 50;
+                }
+                const timeTaken = (Date.now() - countrySelectedTimestamp) / 1000;
+                const speedBonus = Math.max(0, 100 - (timeTaken * 5));
+                
+                const pointsGained = Math.round((basePoints + accuracyBonus + speedBonus) * comboMultiplier);
+                score += pointsGained;
+                
+                updateScoreDisplay();
+                showPointsIndicator(pointsGained);
+            }
+
+            function startComboTimer() {
+                const startTime = Date.now();
+                comboTimerInterval = setInterval(() => {
+                    const elapsedTime = Date.now() - startTime;
+                    const remainingPercentage = Math.max(0, 100 - (elapsedTime / COMBO_DURATION) * 100);
+                    const offset = progressBarLength * (1 - (remainingPercentage / 100));
+                    timerProgressBar.style.strokeDashoffset = offset;
+                    if (remainingPercentage <= 0) {
+                        clearInterval(comboTimerInterval);
+                        resetCombo();
+                    }
+                }, 50);
+            }
+
+            function resetCombo() {
+                comboCount = 0;
+                updateComboMeter();
+                if(progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
+            }
+
+            function updateScoreDisplay() { scoreDisplay.textContent = `Score: ${score}`; }
+
+            function updateComboMeter() {
+                timerDisplay.classList.remove('combo-heat-max');
+                comboMultiplier = 1;
+                if (comboCount === 0) { timerDisplay.textContent = '1x'; return; }
+                if (comboCount === 1) timerDisplay.textContent = '🔥1x';
+                else if (comboCount === 2) timerDisplay.textContent = '🔥1x🔥';
+                else {
+                    comboMultiplier = Math.min(8, 1 + (comboCount - 2)); 
+                    timerDisplay.textContent = `${comboMultiplier}x`;
+                    if (comboMultiplier >= 8) timerDisplay.classList.add('combo-heat-max');
+                }
+            }
+
+            function showPointsIndicator(points) {
+                pointsIndicator.textContent = `+${points}`;
+                pointsIndicator.style.backgroundColor = comboMultiplier > 1 ? '#ef4444' : '#22c55e';
+                pointsIndicator.classList.add('show');
+                setTimeout(() => { pointsIndicator.classList.remove('show'); }, 1000);
+            }
+
+            // --- SETTINGS AND QUIZ LOGIC ---
+            function handleSettingClick(e, containerId) {
+                const button = e.target.closest('button');
+                if (!button) return null;
+                const container = document.getElementById(containerId);
+
+                container.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('active', ...themes[theme].classes.settingActive.split(' '));
+                    btn.classList.add(...themes[theme].classes.settingInactive.split(' '));
+                });
+                
+                button.classList.add('active', ...themes[theme].classes.settingActive.split(' '));
+                button.classList.remove(...themes[theme].classes.settingInactive.split(' '));
+
+                return button.dataset.value;
+            }
+
+            playStyleOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, 'play-style-options');
+                if (value) { playStyle = value; updateTimerDisplay(); }
+            });
+            tabOrderOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, 'tab-order-options');
+                if (value) tabOrder = value;
+            });
+            difficultyOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, 'difficulty-options');
+                if (value) {
+                    difficulty = value;
+                    const pathButton = tabOrderOptions.querySelector('button[data-value="path"]');
+                    if (difficulty === 'mirror') {
+                        pathButton.classList.add('disabled');
+                        if (tabOrder === 'path') {
+                            tabOrder = 'random';
+                            // Visually update the tab order buttons
+                            const randomButton = tabOrderOptions.querySelector('button[data-value="random"]');
+                            handleSettingClick({ target: randomButton }, 'tab-order-options');
+                        }
+                    } else {
+                        pathButton.classList.remove('disabled');
+                    }
+                }
+            });
+            themeOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, 'theme-options');
+                if(value) applyTheme(value);
+            });
+
+
+            function startQuiz() {
+                quizState = 'playing';
+                startQuizBtn.classList.add('hidden');
+                settingsPanel.classList.add('disabled');
+                finishAttemptBtn.style.display = 'inline-block';
+                finishAttemptBtn.disabled = false;
+                guessInput.classList.remove('hidden');
+                
+                if (difficulty === 'mirror') {
+                    subtitle.textContent = "Click the prompted country on the map.";
+                    guessInput.readOnly = true;
+                } else {
+                    subtitle.textContent = "Click a country or press Tab for a new one!";
+                    guessInput.readOnly = false;
+                    guessInput.placeholder = 'Type country name...';
+                    finishAttemptBtn.disabled = true; // Only enable after first correct guess
+                }
+                
+                quizStartTime = Date.now();
+
+                if (!progressBarLength) {
+                    progressBarLength = timerProgressBar.getTotalLength();
+                    timerProgressBar.style.strokeDasharray = progressBarLength;
+                    timerProgressBar.style.strokeDashoffset = progressBarLength;
+                }
+                
+                if (playStyle === 'sprint') scoreDisplay.classList.remove('hidden');
+                
+                quizSequence = [];
+                currentSequenceIndex = -1;
+                const countriesForQuiz = allCountries.slice();
+
+                switch(tabOrder) {
+                    case 'alphabetical': quizSequence = countriesForQuiz; break;
+                    case 'path':
+                        if (difficulty === 'mirror') break; // Should be disabled, but as a safeguard
+                        const addedCountries = new Set();
+                        quizSequence = [];
+                        countryPath.forEach(pathName => {
+                            const countriesToAdd = allCountries.filter(c => c.normalized === pathName || countryAliases[pathName] === c.normalized || (specialCases[pathName] && specialCases[pathName].includes(c.normalized)));
+                            countriesToAdd.forEach(country => {
+                                if (!addedCountries.has(country.name)) {
+                                    quizSequence.push(country);
+                                    addedCountries.add(country.name);
+                                }
+                            });
+                        });
+                        quizSequence.push(...allCountries.filter(c => !addedCountries.has(c.name)).sort((a,b) => a.name.localeCompare(b.name)));
+                        break;
+                    case 'random':
+                    default:
+                        for (let i = countriesForQuiz.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [countriesForQuiz[i], countriesForQuiz[j]] = [countriesForQuiz[j], countriesForQuiz[i]];
+                        }
+                        quizSequence = countriesForQuiz;
+                        break;
+                }
+                
+                statusDisplayContainer.classList.remove('hidden');
+                if (playStyle === 'timed' || playStyle === 'zen') startTimer();
+                
+                if (difficulty === 'mirror') {
+                    if (playStyle === 'paced') startPacedTimer();
+                    promptNextMirrorCountry();
+                } else {
+                    if (playStyle === 'paced') startPacedTimer();
+                    else selectNextCountry();
+                }
+                updateTimerDisplay();
+            }
+
+            startQuizBtn.addEventListener('click', startQuiz);
+            
+            function finishQuiz(reason) {
+                quizState = 'finished';
+                const timeSpent = Math.round((Date.now() - quizStartTime) / 1000);
+                stopAllTimers();
+                
+                let correctCount = Object.keys(userAnswers).length;
+                let missesHTML = '';
+                
+                geoJsonLayer.eachLayer(layer => {
+                    const name = layer.feature.properties.name;
+                    if (name === 'Antarctica' || bundledCountries.includes(name) || name === 'Falkland Islands (Malvinas)') return;
+
+                    const isGuessed = userAnswers[name];
+                    const wasMissed = layer.options.fillColor === getStyle('incorrectFinished').fillColor;
+
+                    if (!isGuessed || wasMissed) {
+                         missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800">You missed: <strong>${name}</strong>.</div>`;
+                    }
+                });
+
+                if(missesHTML === '') missesHTML = `<p class="text-green-700">Perfect score!</p>`;
+
+                if (reason === 'time') {
+                    scoreTitle.textContent = "Time's Up!";
+                } else {
+                    scoreTitle.textContent = "Your Score";
+                }
+                
+                finalScoreDisplay.textContent = `${correctCount}/${allCountries.length}`;
+                scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
+                missesContainer.innerHTML = missesHTML;
+                
+                const finalTime = (playStyle === 'zen') ? zenTimeElapsed : timeSpent;
+                const minutes = Math.floor(finalTime / 60);
+                const seconds = finalTime % 60;
+                finalTimeDisplay.textContent = `Total Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                if (playStyle === 'sprint') {
+                    finalTotalScoreDisplay.textContent = `Final Score: ${score}`;
+                    finalTotalScoreDisplay.classList.remove('hidden');
+                } else {
+                    finalTotalScoreDisplay.classList.add('hidden');
+                }
+
+                scoreModal.classList.remove('hidden');
+                scoreModal.classList.add('flex');
+                setTimeout(() => scoreModal.querySelector('#score-modal-content').classList.remove('scale-95', 'opacity-0'), 50);
+            }
+
+            finishAttemptBtn.addEventListener('click', () => finishQuiz('manual'));
+            
+            function hideModal(modal) {
+                const content = modal.querySelector('div');
+                content.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                     modal.classList.add('hidden');
+                     modal.classList.remove('flex');
+                     content.classList.remove('scale-95', 'opacity-0'); // Reset for next time
+                }, 300);
+            }
+
+            closeModalBtn.addEventListener('click', () => { hideModal(scoreModal); resetGame(); });
+            viewFinishedMapBtn.addEventListener('click', () => { hideModal(scoreModal); showFinishedMap(); });
+            backToQuizBtn.addEventListener('click', () => resetGame());
+
+            function showFinishedMap() {
+                quizState = 'finished';
+                document.getElementById('quiz-controls-container').classList.add('hidden');
+                settingsPanel.classList.add('hidden');
+                finishAttemptBtn.classList.add('hidden');
+                backToQuizBtn.classList.remove('hidden');
+                subtitle.textContent = "Here's a review of your answers.";
+                scoreDisplay.classList.add('hidden');
+                statusDisplayContainer.classList.add('hidden');
+                tooltipLayerGroup.clearLayers();
+                
+                geoJsonLayer.eachLayer(layer => {
+                    const countryName = layer.feature.properties.name;
+                    if (countryName === 'Antarctica') return;
+                    layer.unbindTooltip();
+                    
+                    let styleKey;
+                    const isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
+                    
+                    if (isGuessed) {
+                        if (theme === 'earth') {
+                            const biome = getCountryBiome(countryName);
+                            styleKey = `correctFinished_${biome}`;
+                        } else {
+                            styleKey = 'correctFinished';
+                        }
+                    } else {
+                        styleKey = 'incorrectFinished';
+                    }
+                    layer.setStyle(getStyle(styleKey));
+                    
+                    const center = getVisualCenter(layer);
+                    L.marker(center, { opacity: 0 })
+                        .bindTooltip(countryName, { permanent: true, direction: 'center', className: 'permanent-tooltip' })
+                        .addTo(tooltipLayerGroup);
+                });
+            }
+
+            function resetGame() {
+                quizState = 'pre-start';
+                settingsPanel.classList.remove('disabled');
+                document.getElementById('quiz-controls-container').classList.remove('hidden');
+                startQuizBtn.classList.remove('hidden');
+                guessInput.classList.add('hidden');
+                guessInput.readOnly = false;
+                settingsPanel.classList.remove('hidden');
+                finishAttemptBtn.style.display = 'none';
+                backToQuizBtn.classList.add('hidden');
+                subtitle.textContent = "Configure your settings and press Start!";
+                scoreDisplay.classList.add('hidden');
+                tooltipLayerGroup.clearLayers();
+                
+                // --- TTS ---
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                }
+                // --- END TTS ---
+                
+                geoJsonLayer.eachLayer(layer => {
+                    if (layer.feature.properties.name === 'Antarctica') layer.setStyle(getStyle('unclickable'));
+                    else {
+                        layer.setStyle(getStyle('default'));
+                        layer.unbindTooltip();
+                    }
+                });
+
+                userAnswers = {};
+                selectedCountryLayer = null;
+                guessInput.value = '';
+                guessInput.placeholder = 'Type country name...';
+                score = 0;
+                quizStartTime = 0;
+                zenTimeElapsed = 0;
+                mirrorTries = 4;
+                updateScoreDisplay();
+                stopAllTimers();
+                resetCombo();
+                updateComboMeter();
+                if (progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
+                updateTimerDisplay();
+            }
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab' && quizState === 'playing') {
+                    e.preventDefault();
+                    if (difficulty === 'mirror') {
+                        if (e.shiftKey) {
+                           promptPreviousMirrorCountry();
+                        } else {
+                           promptNextMirrorCountry();
+                        }
+                    } else {
+                        if (e.shiftKey) {
+                            selectPreviousCountry();
+                        } else {
+                            selectNextCountry();
+                        }
+                    }
+                }
+            });
+
+            // --- TIMER LOGIC ---
+            let pacedTimeRemaining;
+
+            function startTimer() {
+                if (playStyle === 'timed') {
+                    timeRemaining = 15 * 60;
+                    timerInterval = setInterval(() => {
+                        timeRemaining--;
+                        updateTimerDisplay();
+                        if (timeRemaining <= 0) finishQuiz('time');
+                    }, 1000);
+                } else if (playStyle === 'zen') {
+                    zenTimeElapsed = 0;
+                     timerInterval = setInterval(() => {
+                        zenTimeElapsed++;
+                        updateTimerDisplay();
+                    }, 1000);
+                }
+                updateTimerDisplay();
+            }
+
+            function startPacedTimer(moveToNext = false) {
+                stopAllTimers();
+                pacedTimeRemaining = PACED_DURATION;
+                updateTimerDisplay();
+
+                if (moveToNext) {
+                    if (difficulty === 'mirror') promptNextMirrorCountry();
+                    else selectNextCountry();
+                }
+
+                timerInterval = setInterval(() => {
+                    pacedTimeRemaining--;
+                    updateTimerDisplay();
+                    if (pacedTimeRemaining < 0) {
+                        // Mark as missed and move to next
+                        if (difficulty === 'mirror') {
+                            const correctName = quizSequence[currentSequenceIndex].name;
+                            const missedLayer = countryData[correctName];
+                            if (missedLayer) missedLayer.setStyle(getStyle('incorrectFinished'));
+                            promptNextMirrorCountry();
+                        } else {
+                            selectNextCountry();
+                        }
+                        startPacedTimer(); // Restart timer for the new country
+                    }
+                }, 1000);
+            }
+            
+            function updateTimerDisplay() {
+                statusDisplayContainer.classList.remove('hidden');
+                timerProgressBar.style.display = 'none';
+                
+                let minutes, seconds;
+
+                switch(playStyle) {
+                    case 'zen':
+                        if (quizState === 'pre-start') zenTimeElapsed = 0;
+                        minutes = Math.floor(zenTimeElapsed / 60);
+                        seconds = zenTimeElapsed % 60;
+                        timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                        break;
+                    case 'timed':
+                        if (quizState === 'pre-start') timeRemaining = 15 * 60;
+                        minutes = Math.floor(timeRemaining / 60);
+                        seconds = timeRemaining % 60;
+                        timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                        break;
+                    case 'paced':
+                        timerProgressBar.style.display = 'block';
+                        if (quizState === 'pre-start') pacedTimeRemaining = PACED_DURATION;
+                        timerDisplay.textContent = `${pacedTimeRemaining}s`;
+                        const pacedOffset = progressBarLength * (1 - (pacedTimeRemaining / PACED_DURATION));
+                        timerProgressBar.style.strokeDashoffset = pacedOffset;
+                        break;
+                    case 'sprint':
+                        timerProgressBar.style.display = 'block';
+                        updateComboMeter();
+                        break;
+                }
+            }
+
+            function stopAllTimers() {
+                clearInterval(timerInterval);
+                clearInterval(comboTimerInterval);
+                clearInterval(hintRevealInterval);
+                timerInterval = null;
+                comboTimerInterval = null;
+                hintRevealInterval = null;
+            }
+
+            // --- INFO MODAL LOGIC ---
+            const settingsInfo = {
+                playStyle: {
+                    title: 'Play Style',
+                    content: `
+                        <p><strong>Zen:</strong> No time limits. A timer will count up to track your time.</p>
+                        <p><strong>Timed:</strong> A 15-minute timer for the entire quiz.</p>
+                        <p><strong>Paced:</strong> 15 seconds to guess each country.</p>
+                        <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.`
+                },
+                tabOrder: {
+                    title: 'Tab Order',
+                    content: `
+                        <p><strong>Random:</strong> Countries are selected in a random order.</p>
+                        <p><strong>Alphabetical:</strong> Countries are selected in alphabetical order.</p>
+                        <p><strong>Path:</strong> Countries are selected following a logical geographical path across the globe. (Not available in Mirror mode).</p>`
+                },
+                difficulty: {
+                    title: 'Difficulty',
+                    content: `
+                        <p><strong>Easy:</strong> Shows the first letter, the number of letters, and reveals a random letter every 3 seconds.</p>
+                        <p><strong>Normal:</strong> Shows the first letter and underscores for the rest of the word.</p>
+                        <p><strong>Hard:</strong> Shows only underscores representing the number of letters.</p>
+                        <p><strong>Extreme:</strong> No hints are provided.</p>
+                        <p><strong>Mirror:</strong> Click the prompted country on the map. You have 4 incorrect clicks per country. Get a country right in Timed mode to add 2 seconds to the clock.</p>`
+                },
+                theme: {
+                    title: 'Theme',
+                    content: `
+                        <p><strong>Voyager:</strong> The classic, light-mode map.</p>
+                        <p><strong>Midnight:</strong> A sleek, dark-mode theme.</p>
+                        <p><strong>Earth:</strong> A terrain-focused, natural-color theme.</p>
+                        <p><strong>Oceanic:</strong> A blue-hued theme emphasizing water bodies.`
+                }
+            };
+
+            settingsPanel.addEventListener('click', (e) => {
+                const icon = e.target.closest('.info-icon');
+                if (icon) {
+                    const settingKey = icon.dataset.setting;
+                    const info = settingsInfo[settingKey];
+                    if (info) {
+                        infoModalTitle.textContent = info.title;
+                        infoModalBody.innerHTML = info.content;
+                        infoModal.classList.remove('hidden');
+                        infoModal.classList.add('flex');
+                        setTimeout(() => infoModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 10);
+                    }
+                }
+            });
+
+            closeInfoModalBtn.addEventListener('click', () => hideModal(infoModal));
+            infoModal.addEventListener('click', (e) => {
+                if (e.target === infoModal) {
+                    hideModal(infoModal);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
