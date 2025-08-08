@@ -327,7 +327,7 @@
           "benin": { "continent": "Africa", "name": "Benin", "bio": "Benin is considered the birthplace of the Vodun (Voodoo) religion, which is practiced by a significant portion of the population.", "quiz_question": "What major religion has its origins in Benin?", "quiz_answer": "Voodoo", "biome": "savanna", "biome_color": "#c3b091" },
           "nigeria": { "continent": "Africa", "name": "Nigeria", "bio": "Nigeria is the most populous country in Africa and is known for its booming film industry, nicknamed 'Nollywood'.", "quiz_question": "What is the nickname for Nigeria's film industry?", "quiz_answer": "Nollywood", "biome": "rainforest", "biome_color": "#2e8b57" },
           "cameroon": { "continent": "Africa", "name": "Cameroon", "bio": "Cameroon is often called 'Africa in miniature' due to its immense geological and cultural diversity, encompassing beaches, deserts, mountains, rainforests, and savannas.", "quiz_question": "What is Cameroon's nickname?", "quiz_answer": "Africa in Miniature", "biome": "rainforest", "biome_color": "#2e8b57" },
-          "car": { "continent": "Africa", "name": "Central African Republic", "bio": "The Central African Republic is one of the most biodiverse areas in Africa, home to forest elephants and lowland gorillas.", "quiz_question": "What elephants can be found in the Central African Republic?", "quiz_answer": "Forest elephants", "biome": "rainforest", "biome_color": "#2e8b57" },
+          "centralafricanrepublic": { "continent": "Africa", "name": "Central African Republic", "bio": "The Central African Republic is one of the most biodiverse areas in Africa, home to forest elephants and lowland gorillas.", "quiz_question": "What elephants can be found in the Central African Republic?", "quiz_answer": "Forest elephants", "biome": "rainforest", "biome_color": "#2e8b57" },
           "southsudan": { "continent": "Africa", "name": "South Sudan", "bio": "South Sudan is the world's newest sovereign state, having gained independence in 2011, and is home to vast and largely untouched savanna and wetland ecosystems.", "quiz_question": "When did South Sudan gain its independence?", "quiz_answer": "2011", "biome": "savanna", "biome_color": "#c3b091" },
           "ethiopia": { "continent": "Africa", "name": "Ethiopia", "bio": "Ethiopia is the birthplace of coffee and is the only African country that was never formally colonized.", "quiz_question": "What popular beverage originated in Ethiopia?", "quiz_answer": "Coffee", "biome": "savanna", "biome_color": "#c3b091" },
           "somalia": { "continent": "Africa", "name": "Somalia", "bio": "Somalia has the longest coastline on mainland Africa and has a long history as an important center for commerce with the rest of the ancient world.", "quiz_question": "What geographic feature does Somalia have that is the longest on mainland Africa?", "quiz_answer": "Coastline", "biome": "desert", "biome_color": "#f4a460" },
@@ -1008,7 +1008,11 @@
                 
                 updateHintDisplay();
                 countrySelectedTimestamp = Date.now();
-                if (playStyle === 'paced') startPacedTimer();
+                //if (playStyle === 'paced') startPacedTimer();
+                // I'm not sure why commenting this out works, 
+                // but if left unchecked, paced mode counts
+                // down by two seconds instead of just one.
+                // compare to https://github.com/psy777/WrenWorldQuiz/commit/7519a6c73a645a36e0a1571f5da63444c96ee7c2
             }
 
             function updateHintDisplay() {
@@ -1058,16 +1062,30 @@
                 const lonSpan = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
                 const countryName = layer.feature.properties.name;
 
-                if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
-                else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
-                else {
-                    const latSpan = bounds.getNorth() - bounds.getSouth();
-                    const lngSpan = bounds.getEast() - bounds.getWest();
-                    const size = latSpan * lngSpan;
-                    let maxZoomLevel = 4;
-                    if (size < 50) maxZoomLevel = 5;
-                    if (size < 5) maxZoomLevel = 6;
-                    map.flyToBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
+                if (playStyle === 'sprint') {
+                    if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
+                    else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
+                    else {
+                        const latSpan = bounds.getNorth() - bounds.getSouth();
+                        const lngSpan = bounds.getEast() - bounds.getWest();
+                        const size = latSpan * lngSpan;
+                        let maxZoomLevel = 4;
+                        if (size < 50) maxZoomLevel = 5;
+                        if (size < 5) maxZoomLevel = 6;
+                        map.fitBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
+                    }
+                } else {
+                    if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
+                    else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
+                    else {
+                        const latSpan = bounds.getNorth() - bounds.getSouth();
+                        const lngSpan = bounds.getEast() - bounds.getWest();
+                        const size = latSpan * lngSpan;
+                        let maxZoomLevel = 4;
+                        if (size < 50) maxZoomLevel = 5;
+                        if (size < 5) maxZoomLevel = 6;
+                        map.flyToBounds(bounds, {maxZoom: maxZoomLevel, paddingTopLeft: [20,20], paddingBottomRight: [20,20]});
+                    }
                 }
             }
             
@@ -1635,6 +1653,7 @@
                     pacedTimeRemaining--;
                     updateTimerDisplay();
                     if (pacedTimeRemaining < 0) {
+                        // Mark as missed and move to next
                         if (difficulty === 'mirror') {
                             const correctName = quizSequence[currentSequenceIndex].name;
                             const missedLayer = countryData[correctName];
@@ -1643,7 +1662,7 @@
                         } else {
                             selectNextCountry();
                         }
-                        startPacedTimer(); 
+                        startPacedTimer(); // Restart timer for the new country
                     }
                 }, 1000);
             }
