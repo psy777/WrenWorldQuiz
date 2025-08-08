@@ -117,7 +117,7 @@
                         </div>
                     </div>
                     
-                    <!-- Country Info Panel - Overlaid on map for large screens, below map for small screens -->
+                    <!-- Country Info Panel -->
                     <div id="country-info-panel" class="absolute top-4 left-4 bottom-4 max-w-sm flex flex-col bg-white p-6 rounded-lg shadow-lg opacity-0 -translate-x-4 pointer-events-none z-20 transition-all duration-300 md:absolute md:top-4 md:left-4 max-md:relative max-md:top-0 max-md:left-0 max-md:w-full max-md:max-w-none max-md:mt-4 max-md:translate-x-0">
                         <h2 id="country-info-name" class="text-2xl font-bold text-blue-800 mb-4">Select a Country</h2>
                         <p id="country-info-bio" class="text-gray-700 text-base leading-relaxed mb-4">Click on a country on the map or use the 'Explore' button to discover interesting facts!</p>
@@ -131,6 +131,7 @@
                             </div>
                             <div id="quiz-feedback" class="mt-3 text-center font-semibold hidden text-sm"></div>
                         </div>
+                        <button id="keep-exploring-btn" class="hidden mt-4 w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition shadow-md">Keep Exploring</button>
                     </div>
                 </div>
 
@@ -496,13 +497,18 @@
             const countryInfoName = document.getElementById('country-info-name');
             const countryInfoBio = document.getElementById('country-info-bio');
             const exploredCounter = document.getElementById('explored-counter');
+            const keepExploringBtn = document.getElementById('keep-exploring-btn');
+            const quizSection = document.getElementById('quiz-section');
+            const quizQuestion = document.getElementById('quiz-question');
+            const quizAnswerInput = document.getElementById('quiz-answer-input');
+            const quizSubmitBtn = document.getElementById('quiz-submit-btn');
+            const quizFeedback = document.getElementById('quiz-feedback');
 
             // --- SVG TIMER SETUP ---
             let progressBarLength; 
             finishAttemptBtn.style.display = 'none';
             
             // --- BIOME DATA ---
-            // This is now handled by the data from countries.json
             function getCountryBiome(countryName) {
                 const details = countryDetails[normalize(countryName)];
                 return details ? details.biome : 'temperate';
@@ -760,7 +766,7 @@
                     },
                     mouseout: e => {
                         const layer = getMainLayer(e.target);
-                        if (layer === selectedCountryLayer) return; // Moved check here
+                        if (layer === selectedCountryLayer) return;
 
                         if (quizState === 'playing' && difficulty !== 'mirror') resetHighlight(layer); 
                         if (quizState === 'explore') resetHighlight(layer);
@@ -781,6 +787,44 @@
             }
 
             // --- EXPLORE MODE LOGIC ---
+            function hideCountryInfoPanel() {
+                if (!countryInfoPanel.classList.contains('opacity-0')) {
+                    countryInfoPanel.classList.add('opacity-0', '-translate-x-4', 'pointer-events-none');
+                    
+                    // Reset quiz UI inside the panel
+                    quizSection.style.transition = 'none';
+                    quizSection.classList.add('hidden');
+                    quizSection.style.opacity = '1';
+                    quizAnswerInput.disabled = false;
+                    quizAnswerInput.value = '';
+                    quizSubmitBtn.disabled = false;
+                    quizFeedback.classList.add('hidden');
+                    keepExploringBtn.classList.add('hidden');
+
+                    // Show the main explore button again
+                    learnBtn.classList.remove('hidden');
+                    learnBtn.textContent = 'Continue Exploring';
+
+                    // Reset selected layer styling
+                    if (selectedCountryLayer) {
+                        resetHighlight(selectedCountryLayer);
+                        selectedCountryLayer = null;
+                    }
+                }
+            }
+
+            map.on('moveend zoomend', () => {
+                if (quizState === 'explore' && selectedCountryLayer) {
+                    const mapBounds = map.getBounds();
+                    const countryBounds = selectedCountryLayer.getBounds();
+                    
+                    // If the country bounds are not intersecting with the map bounds, hide the panel
+                    if (!mapBounds.intersects(countryBounds)) {
+                        hideCountryInfoPanel();
+                    }
+                }
+            });
+
             function updateExploredCounter() {
                 if (quizState !== 'explore') return;
                 const exploredCount = Object.keys(exploredCountries).length;
@@ -794,9 +838,16 @@
 
                 const name = layer.feature.properties.name;
                 
+                if (selectedCountryLayer && selectedCountryLayer !== layer) {
+                    resetHighlight(selectedCountryLayer);
+                }
+
                 selectedCountryLayer = layer;
                 applyTheme(theme);
                 layer.bringToFront();
+
+                learnBtn.classList.add('hidden'); // Hide the main explore button
+                keepExploringBtn.classList.add('hidden'); // Ensure keep exploring is hidden initially
 
                 const normalizedName = normalize(name);
                 const details = countryDetails[normalizedName] || countryDetails[reverseAliases[normalizedName]];
@@ -805,7 +856,6 @@
                     countryInfoName.textContent = details.name;
                     countryInfoBio.textContent = details.bio;
                     
-                    // Show quiz if available
                     if (details.quiz_question && details.quiz_answer) {
                         showQuiz(details.quiz_question, details.quiz_answer);
                     } else {
@@ -817,34 +867,24 @@
                     hideQuiz();
                 }
 
-                // Show the info panel
                 countryInfoPanel.classList.remove('opacity-0', '-translate-x-4', 'pointer-events-none');
             }
 
             function showQuiz(question, correctAnswer) {
-                const quizSection = document.getElementById('quiz-section');
-                const quizQuestion = document.getElementById('quiz-question');
-                const quizAnswerInput = document.getElementById('quiz-answer-input');
-                const quizFeedback = document.getElementById('quiz-feedback');
-                
                 quizQuestion.textContent = question;
                 quizAnswerInput.value = '';
+                quizAnswerInput.disabled = false;
+                quizSubmitBtn.disabled = false;
                 quizFeedback.classList.add('hidden');
                 quizSection.classList.remove('hidden');
-                
-                // Store the correct answer for checking
                 quizSection.dataset.correctAnswer = correctAnswer;
             }
 
             function hideQuiz() {
-                const quizSection = document.getElementById('quiz-section');
                 quizSection.classList.add('hidden');
             }
 
             function checkQuizAnswer() {
-                const quizSection = document.getElementById('quiz-section');
-                const quizAnswerInput = document.getElementById('quiz-answer-input');
-                const quizFeedback = document.getElementById('quiz-feedback');
                 const userAnswer = quizAnswerInput.value.trim();
                 const correctAnswer = quizSection.dataset.correctAnswer;
                 
@@ -860,7 +900,20 @@
                         exploredCountries[name] = true;
                         updateExploredCounter();
                     }
-                    // The quiz section will remain visible.
+                    
+                    quizAnswerInput.disabled = true;
+                    quizSubmitBtn.disabled = true;
+
+                    // Fade out quiz and show keep exploring button
+                    setTimeout(() => {
+                        quizSection.style.transition = 'opacity 0.5s ease-out';
+                        quizSection.style.opacity = '0';
+                        setTimeout(() => {
+                            quizSection.classList.add('hidden');
+                            keepExploringBtn.classList.remove('hidden');
+                        }, 500); // Wait for fade out
+                    }, 1500); // Wait before fading
+
                 } else {
                     quizFeedback.textContent = "Not quite right. Try again!";
                     quizFeedback.className = "mt-3 text-center font-semibold text-red-600";
@@ -869,23 +922,25 @@
                 }
             }
 
-            // Add event listeners for quiz functionality
-            const quizSubmitBtn = document.getElementById('quiz-submit-btn');
-            const quizAnswerInput = document.getElementById('quiz-answer-input');
+            // --- EVENT LISTENERS FOR EXPLORE MODE ---
+            quizSubmitBtn.addEventListener('click', checkQuizAnswer);
             
-            if (quizSubmitBtn) {
-                quizSubmitBtn.addEventListener('click', checkQuizAnswer);
-            }
-            
-            if (quizAnswerInput) {
-                quizAnswerInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        checkQuizAnswer();
-                    }
-                });
-            }
+            quizAnswerInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    checkQuizAnswer();
+                }
+            });
             
             learnBtn.addEventListener('click', () => {
+                const randomIndex = Math.floor(Math.random() * allCountries.length);
+                const randomCountry = allCountries[randomIndex];
+                if (randomCountry && randomCountry.layer) {
+                    showCountryInfo(randomCountry.layer);
+                    smartFitBounds(randomCountry.layer);
+                }
+            });
+
+            keepExploringBtn.addEventListener('click', () => {
                 const randomIndex = Math.floor(Math.random() * allCountries.length);
                 const randomCountry = allCountries[randomIndex];
                 if (randomCountry && randomCountry.layer) {
@@ -929,7 +984,6 @@
                 } else {
                     mirrorTries--;
                     
-                    // Flash red for incorrect guess
                     const incorrectLayer = clickedLayer;
                     const originalStyle = getStyle('default');
                     const flashStyle = getStyle('incorrectFinished');
@@ -985,9 +1039,13 @@
             function resetHighlight(layer) {
                 const name = layer.feature.properties.name;
                 const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
-                if (isAnswered) return;
+                
+                let styleKey = isAnswered ? 'guessed' : 'default';
+                if (isAnswered && theme === 'earth') {
+                    styleKey = `guessed_${getCountryBiome(name)}`;
+                }
 
-                const style = getStyle('default');
+                const style = getStyle(styleKey);
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
             }
@@ -1008,11 +1066,6 @@
                 
                 updateHintDisplay();
                 countrySelectedTimestamp = Date.now();
-                //if (playStyle === 'paced') startPacedTimer();
-                // I'm not sure why commenting this out works, 
-                // but if left unchecked, paced mode counts
-                // down by two seconds instead of just one.
-                // compare to https://github.com/psy777/WrenWorldQuiz/commit/7519a6c73a645a36e0a1571f5da63444c96ee7c2
             }
 
             function updateHintDisplay() {
@@ -1325,11 +1378,13 @@
                     startQuizBtn.classList.add('hidden');
                     guessInput.classList.add('hidden');
                     learnBtn.classList.remove('hidden');
+                    learnBtn.textContent = 'Explore'; // Reset button text
                     learnBtn.parentElement.classList.add('w-full', 'justify-center');
                     finishAttemptBtn.style.display = 'none';
                     tabOrderOptions.parentElement.classList.add('disabled');
                     difficultyOptions.parentElement.classList.add('disabled');
                     statusDisplayContainer.classList.add('hidden');
+                    hideCountryInfoPanel();
                 } else {
                     quizState = 'pre-start';
                     document.getElementById('main-title').textContent = 'World Map Quiz';
@@ -1446,7 +1501,6 @@
                     promptNextMirrorCountry();
                 } else {
                     if (playStyle === 'paced') {
-                        // This line is changed to automatically select the first country.
                         startPacedTimer(true);
                     } else {
                         selectNextCountry();
@@ -1562,9 +1616,7 @@
             }
 
             function resetGame() {
-                // Reset to default explore mode
                 updatePlayStyleUI('explore');
-                // Visually select the 'explore' button again
                 const exploreButton = playStyleOptions.querySelector('button[data-value="explore"]');
                 handleSettingClick({ target: exploreButton }, 'play-style-options');
 
@@ -1653,7 +1705,6 @@
                     pacedTimeRemaining--;
                     updateTimerDisplay();
                     if (pacedTimeRemaining < 0) {
-                        // Mark as missed and move to next
                         if (difficulty === 'mirror') {
                             const correctName = quizSequence[currentSequenceIndex].name;
                             const missedLayer = countryData[correctName];
@@ -1662,7 +1713,7 @@
                         } else {
                             selectNextCountry();
                         }
-                        startPacedTimer(); // Restart timer for the new country
+                        startPacedTimer();
                     }
                 }, 1000);
             }
@@ -1721,7 +1772,7 @@
                 playStyle: {
                     title: 'Play Style',
                     content: `
-                        <p><strong>Explore:</strong> Freely browse the map and learn facts about each country. No timers, no score.</p>
+                        <p><strong>Explore:</strong> Freely browse the map, learn facts about each country, and take an optional mini-quiz.</p>
                         <p><strong>Timed:</strong> A 15-minute timer for the entire quiz.</p>
                         <p><strong>Paced:</strong> 15 seconds to guess each country.</p>
                         <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.`
