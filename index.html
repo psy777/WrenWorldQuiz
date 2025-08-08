@@ -18,7 +18,7 @@
             z-index: 1;
         }
         .leaflet-container { background: var(--map-bg-color, #a2d2ff); }
-        #score-modal, #info-modal { z-index: 1001; }
+        #score-modal, #info-modal, #profile-page { z-index: 1001; }
         .permanent-tooltip {
             background-color: rgba(255, 255, 255, 0.9);
             border: none;
@@ -75,20 +75,48 @@
         #country-info-panel {
             transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
         }
+        /* Profile Page Styling */
+        .stat-card {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(209, 213, 219, 0.5);
+        }
+        .achievement-badge {
+            transition: transform 0.2s ease-in-out;
+        }
+        .achievement-badge.unlocked {
+            filter: none;
+            opacity: 1;
+        }
+        .achievement-badge.locked {
+            filter: grayscale(100%);
+            opacity: 0.5;
+        }
+        .achievement-badge:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4 transition-colors duration-300">
 
     <div id="main-container" class="w-full max-w-7xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-2xl border border-gray-200 transition-colors duration-300">
         <header class="text-center mb-4 relative">
-            <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map quiz-controls-container</h1>
+            <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
             <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
+            <div class="absolute top-0 left-0 flex items-center gap-2">
+                <button id="back-to-quiz-btn" class="hidden bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
+                 <button id="profile-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                    </svg>
+                    Profile
+                </button>
+            </div>
             <div id="explored-counter" class="hidden my-2 md:my-0 md:absolute md:top-0 md:right-0 bg-green-100 text-green-800 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md"></div>
-            <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
             <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
         </header>
 
-        <div class="relative">
+        <div id="quiz-content" class="relative">
             <!-- Map container with overlaid quiz panel -->
             <div class="w-full">
                 <div class="map-container mb-6 relative">
@@ -198,6 +226,68 @@
             </div>
         </div>
     </div>
+
+    <!-- Profile Page -->
+    <div id="profile-page" class="fixed inset-0 bg-gray-100 p-4 sm:p-6 md:p-8 hidden overflow-y-auto">
+        <div class="w-full max-w-7xl mx-auto">
+            <header class="flex items-center justify-between mb-6">
+                <h1 class="text-3xl sm:text-4xl font-bold text-blue-900">Your Profile</h1>
+                <button id="close-profile-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition shadow-md">Back to Quiz</button>
+            </header>
+
+            <!-- Overall Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="stat-card p-4 rounded-lg text-center shadow">
+                    <p class="text-sm text-gray-600">Games Played</p>
+                    <p id="stat-games-played" class="text-3xl font-bold text-blue-800">0</p>
+                </div>
+                <div class="stat-card p-4 rounded-lg text-center shadow">
+                    <p class="text-sm text-gray-600">Total Time Played</p>
+                    <p id="stat-time-played" class="text-3xl font-bold text-blue-800">0m</p>
+                </div>
+                <div class="stat-card p-4 rounded-lg text-center shadow">
+                    <p class="text-sm text-gray-600">Overall Accuracy</p>
+                    <p id="stat-accuracy" class="text-3xl font-bold text-green-600">0%</p>
+                </div>
+                <div class="stat-card p-4 rounded-lg text-center shadow">
+                    <p class="text-sm text-gray-600">Countries Explored</p>
+                    <p id="stat-countries-explored" class="text-3xl font-bold text-indigo-600">0</p>
+                </div>
+            </div>
+
+            <!-- Best Scores -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Best Scores</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="stat-card p-4 rounded-lg shadow">
+                        <h3 class="font-bold text-lg text-center text-blue-700">Timed</h3>
+                        <p class="text-center text-2xl font-semibold" id="best-score-timed">0 / 0</p>
+                        <p class="text-center text-sm text-gray-500" id="best-time-timed">Time: 0s</p>
+                    </div>
+                    <div class="stat-card p-4 rounded-lg shadow">
+                        <h3 class="font-bold text-lg text-center text-blue-700">Paced</h3>
+                        <p class="text-center text-2xl font-semibold" id="best-score-paced">0 / 0</p>
+                    </div>
+                    <div class="stat-card p-4 rounded-lg shadow">
+                        <h3 class="font-bold text-lg text-center text-blue-700">Sprint</h3>
+                        <p class="text-center text-2xl font-semibold" id="best-score-sprint">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Achievements -->
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Achievements</h2>
+                <div id="achievements-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <!-- Achievements will be dynamically inserted here -->
+                </div>
+            </div>
+             <div class="mt-8 text-center">
+                <button id="reset-stats-btn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition shadow-md">Reset All Stats</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Modals -->
     <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
@@ -435,6 +525,171 @@
             let currentSequenceIndex = -1;
             let exploredCountries = {};
             const PROGRESS_KEY = 'worldQuizProgress';
+            const PROFILE_STATS_KEY = 'worldQuizProfileStats';
+
+            // --- PROFILE AND STATS ---
+            let profileStats;
+
+            const achievements = {
+                firstGame: { title: "Welcome Aboard!", description: "Play your first quiz game.", unlocked: false },
+                explorer10: { title: "Novice Explorer", description: "Explore 10 different countries.", unlocked: false },
+                explorer50: { title: "Seasoned Explorer", description: "Explore 50 different countries.", unlocked: false },
+                globetrotter: { title: "Globetrotter", description: "Explore all countries.", unlocked: false },
+                perfectScore: { title: "Perfectionist", description: "Get a 100% score in any quiz mode.", unlocked: false },
+                sprintMaster: { title: "Sprint Master", description: "Score over 20,000 in Sprint mode.", unlocked: false },
+                timeBender: { title: "Time Bender", description: "Finish a Timed quiz with over 5 minutes remaining.", unlocked: false },
+                allModes: { title: "Jack of All Trades", description: "Play every game mode at least once.", unlocked: false }
+            };
+
+            function initializeDefaultStats() {
+                const defaultStats = {
+                    gamesPlayed: 0,
+                    totalTimePlayed: 0, // in seconds
+                    totalCorrectGuesses: 0,
+                    totalGuesses: 0,
+                    countriesExplored: 0,
+                    bestScores: {
+                        timed: { score: 0, total: 0, time: 0 },
+                        paced: { score: 0, total: 0 },
+                        sprint: { score: 0 }
+                    },
+                    modesPlayed: {
+                        timed: 0,
+                        paced: 0,
+                        sprint: 0
+                    },
+                    achievements: {}
+                };
+                // Initialize achievements from the main definition
+                for (const key in achievements) {
+                    defaultStats.achievements[key] = false;
+                }
+                return defaultStats;
+            }
+
+            function loadProfileStats() {
+                try {
+                    const savedStats = localStorage.getItem(PROFILE_STATS_KEY);
+                    if (savedStats) {
+                        profileStats = JSON.parse(savedStats);
+                        // Ensure achievements object is in sync with the definition
+                        for (const key in achievements) {
+                            if (!(key in profileStats.achievements)) {
+                                profileStats.achievements[key] = false;
+                            }
+                        }
+                    } else {
+                        profileStats = initializeDefaultStats();
+                    }
+                } catch (e) {
+                    console.error("Could not load profile stats:", e);
+                    profileStats = initializeDefaultStats();
+                }
+            }
+
+            function saveProfileStats() {
+                try {
+                    localStorage.setItem(PROFILE_STATS_KEY, JSON.stringify(profileStats));
+                } catch (e) {
+                    console.error("Could not save profile stats:", e);
+                }
+            }
+
+            function updateProfileStats(gameResult) {
+                profileStats.gamesPlayed++;
+                profileStats.totalTimePlayed += gameResult.timeSpent;
+                profileStats.totalCorrectGuesses += gameResult.correctCount;
+                profileStats.totalGuesses += gameResult.totalCountries;
+                profileStats.modesPlayed[gameResult.playStyle]++;
+
+                // Update best scores
+                const bs = profileStats.bestScores;
+                switch (gameResult.playStyle) {
+                    case 'timed':
+                        if (gameResult.correctCount > bs.timed.score || (gameResult.correctCount === bs.timed.score && gameResult.timeSpent < bs.timed.time)) {
+                            bs.timed = { score: gameResult.correctCount, total: gameResult.totalCountries, time: gameResult.timeSpent };
+                        }
+                        break;
+                    case 'paced':
+                        if (gameResult.correctCount > bs.paced.score) {
+                            bs.paced = { score: gameResult.correctCount, total: gameResult.totalCountries };
+                        }
+                        break;
+                    case 'sprint':
+                        if (gameResult.sprintScore > bs.sprint.score) {
+                            bs.sprint.score = gameResult.sprintScore;
+                        }
+                        break;
+                }
+                
+                checkAchievements(gameResult);
+                saveProfileStats();
+            }
+
+            function checkAchievements(gameResult) {
+                // First Game
+                if (!profileStats.achievements.firstGame) unlockAchievement('firstGame');
+
+                // Explorer achievements
+                profileStats.countriesExplored = Object.keys(exploredCountries).length;
+                if (profileStats.countriesExplored >= 10 && !profileStats.achievements.explorer10) unlockAchievement('explorer10');
+                if (profileStats.countriesExplored >= 50 && !profileStats.achievements.explorer50) unlockAchievement('explorer50');
+                if (profileStats.countriesExplored === allCountries.length && !profileStats.achievements.globetrotter) unlockAchievement('globetrotter');
+
+                // Game result based achievements
+                if (gameResult) {
+                    if (gameResult.correctCount === gameResult.totalCountries && !profileStats.achievements.perfectScore) unlockAchievement('perfectScore');
+                    if (gameResult.playStyle === 'sprint' && gameResult.sprintScore > 20000 && !profileStats.achievements.sprintMaster) unlockAchievement('sprintMaster');
+                    if (gameResult.playStyle === 'timed' && (15 * 60 - gameResult.timeSpent) > 300 && !profileStats.achievements.timeBender) unlockAchievement('timeBender');
+                    
+                    const { timed, paced, sprint } = profileStats.modesPlayed;
+                    if (timed > 0 && paced > 0 && sprint > 0 && !profileStats.achievements.allModes) unlockAchievement('allModes');
+                }
+            }
+            
+            function unlockAchievement(key) {
+                if (!profileStats.achievements[key]) {
+                    profileStats.achievements[key] = true;
+                    // Optional: show a notification to the user
+                    console.log(`Achievement Unlocked: ${achievements[key].title}`);
+                    saveProfileStats();
+                }
+            }
+
+
+            function displayProfileStats() {
+                loadProfileStats(); // Make sure we have the latest stats
+                
+                document.getElementById('stat-games-played').textContent = profileStats.gamesPlayed;
+                const totalMinutes = Math.round(profileStats.totalTimePlayed / 60);
+                document.getElementById('stat-time-played').textContent = `${totalMinutes}m`;
+                const accuracy = profileStats.totalGuesses > 0 ? Math.round((profileStats.totalCorrectGuesses / profileStats.totalGuesses) * 100) : 0;
+                document.getElementById('stat-accuracy').textContent = `${accuracy}%`;
+                document.getElementById('stat-countries-explored').textContent = `${profileStats.countriesExplored} / ${allCountries.length}`;
+
+                // Best Scores
+                const bs = profileStats.bestScores;
+                document.getElementById('best-score-timed').textContent = `${bs.timed.score} / ${bs.timed.total}`;
+                document.getElementById('best-time-timed').textContent = `Time: ${bs.timed.time}s`;
+                document.getElementById('best-score-paced').textContent = `${bs.paced.score} / ${bs.paced.total}`;
+                document.getElementById('best-score-sprint').textContent = bs.sprint.score;
+
+                // Achievements
+                const achievementsContainer = document.getElementById('achievements-container');
+                achievementsContainer.innerHTML = '';
+                for (const key in achievements) {
+                    const isUnlocked = profileStats.achievements[key];
+                    const achievement = achievements[key];
+                    const badgeHTML = `
+                        <div class="achievement-badge ${isUnlocked ? 'unlocked' : 'locked'} p-4 rounded-lg text-center shadow-md cursor-pointer stat-card" title="${achievement.description}">
+                            <p class="text-4xl mb-2">${isUnlocked ? '🏆' : '❓'}</p>
+                            <p class="font-bold text-sm">${achievement.title}</p>
+                        </div>
+                    `;
+                    achievementsContainer.innerHTML += badgeHTML;
+                }
+            }
+
 
             // --- LOCALSTORAGE FUNCTIONS ---
             function saveProgress() {
@@ -525,6 +780,13 @@
             const pathData = "Canada usa Mexico Bahamas cuba Jamaica Haiti DominicanRepublic belize Guatemala elsalvador honduras nicaragua costarica panama Colombia venezuela trinidad guyana suriname france ecuador peru Bolivia brazil paray uruguay argentina chile falklandislands Iceland ireland uk Norway Sweden Finland estonia latvia lithuania russia belarus ukraine moldova romania bulgaria cyprus greece macedonia albania serbia kosovo Montenegro bosnia Croatia Slovenia Hungary Slovakia Czechia Poland germany denmark netherlands Belgium Luxembourg Switzerland Lichtenstein austria italy spain portugal morocco algeria Tunisia Libya egypt Mauritania mali burkinafaso niger chad sudan eritrea Djibouti senegal gambia guineabissau guinea sierraleone liberia ivorycoast ghana togo benin nigeria Cameroon car southsudan ethiopia somalia equatorialguinea Gabon congo democraticrepublicofthecongo rwanda Burundi brunei bhutan uganda kenya tanzania angola Zambia Malawi Mozambique Zimbabwe Botswana namibia southafrica lesotho eswatini madagascar japan southkorea northkorea china mongolia kazakhstan uzbekistan Kyrgyzstan turkmenistan Tajikistan Afghanistan pakistan turkey georgia armenia azerbaijan lebanon syria israel jordan iraq iran saudiarabia yemen oman uae Qatar Kuwait india Srilanka nepal Bangladesh Myanmar thailand laos vietnam cambodia Malaysia taiwan philippines indonesia easttimor australia newguinea solomonislands vanuatu Fiji newcaledonia newzealand";
 
             // --- DOM ELEMENTS ---
+            const mainContainer = document.getElementById('main-container');
+            const profilePage = document.getElementById('profile-page');
+            const profileBtn = document.getElementById('profile-btn');
+            const closeProfileBtn = document.getElementById('close-profile-btn');
+            const resetStatsBtn = document.getElementById('reset-stats-btn');
+            const quizContent = document.getElementById('quiz-content');
+
             const guessInput = document.getElementById('country-guess-input');
             const finishAttemptBtn = document.getElementById('finish-attempt-btn');
             const scoreModal = document.getElementById('score-modal');
@@ -710,6 +972,7 @@
                     allCountries.sort((a, b) => a.name.localeCompare(b.name));
                     countryPath = pathData.toLowerCase().split(/\s+/);
                     
+                    loadProfileStats();
                     const savedQuizSequence = loadProgress();
                     
                     if (savedQuizSequence) {
@@ -769,7 +1032,7 @@
                         } else if (name === 'Antarctica') {
                             styleKey = 'unclickable';
                         } else {
-                            const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                            const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
                             if (isAnswered) {
                                 styleKey = (theme === 'earth') ? `guessed_${getCountryBiome(name)}` : 'guessed';
                             } else {
@@ -993,6 +1256,9 @@
                     const name = selectedCountryLayer.feature.properties.name;
                     if (!exploredCountries[name]) {
                         exploredCountries[name] = true;
+                        profileStats.countriesExplored = Object.keys(exploredCountries).length;
+                        checkAchievements();
+                        saveProfileStats();
                         updateExploredCounter();
                         saveProgress(); // Save progress after exploring a new country
                     }
@@ -1141,7 +1407,7 @@
 
             function highlightFeature(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
                 if (isAnswered || layer === selectedCountryLayer) return;
                 
                 const style = { weight: 3, color: getStyle('selected').color };
@@ -1152,7 +1418,7 @@
 
             function resetHighlight(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
+                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
                 
                 let styleKey = isAnswered ? 'guessed' : 'default';
                 if (isAnswered && theme === 'earth') {
@@ -1683,6 +1949,17 @@
                 let correctCount = Object.keys(userAnswers).length;
                 let missesHTML = '';
                 
+                const gameResult = {
+                    playStyle: playStyle,
+                    timeSpent: timeSpent,
+                    correctCount: correctCount,
+                    totalCountries: allCountries.length,
+                    sprintScore: score
+                };
+                if (playStyle !== 'explore') {
+                    updateProfileStats(gameResult);
+                }
+
                 geoJsonLayer.eachLayer(layer => {
                     const name = layer.feature.properties.name;
                     if (name === 'Antarctica' || bundledCountries.includes(name) || name === 'Falkland Islands (Malvinas)') return;
@@ -2038,6 +2315,26 @@
             infoModal.addEventListener('click', (e) => {
                 if (e.target === infoModal) {
                     hideModal(infoModal);
+                }
+            });
+
+            // --- PROFILE PAGE EVENT LISTENERS ---
+            profileBtn.addEventListener('click', () => {
+                displayProfileStats();
+                mainContainer.classList.add('hidden');
+                profilePage.classList.remove('hidden');
+            });
+
+            closeProfileBtn.addEventListener('click', () => {
+                mainContainer.classList.remove('hidden');
+                profilePage.classList.add('hidden');
+            });
+
+            resetStatsBtn.addEventListener('click', () => {
+                if (confirm("Are you sure you want to reset all your stats and achievements? This cannot be undone.")) {
+                    profileStats = initializeDefaultStats();
+                    saveProfileStats();
+                    displayProfileStats();
                 }
             });
         });
