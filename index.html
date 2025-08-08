@@ -404,7 +404,7 @@
           "indonesia": { "continent": "Asia", "name": "Indonesia", "bio": "Indonesia is the world's largest archipelago, with over 17,000 islands, and it has the largest Muslim population in the world.", "quiz_question": "How many islands make up Indonesia?", "quiz_answer": "17,000", "biome": "rainforest", "biome_color": "#2e8b57" },
           "easttimor": { "continent": "Asia", "name": "East Timor", "bio": "East Timor, or Timor-Leste, is one of the world's newest countries, gaining independence in 2002, and is known for its rich marine biodiversity.", "quiz_question": "In what year did East Timor gain independence?", "quiz_answer": "2002", "biome": "rainforest", "biome_color": "#2e8b57" },
           "australia": { "continent": "Australia/Oceania", "name": "Australia", "bio": "Australia is both a continent and a country, famous for its unique wildlife like kangaroos and koalas, and natural wonders like the Great Barrier Reef.", "quiz_question": "What is the world's largest coral reef system, located off the coast of Australia?", "quiz_answer": "The Great Barrier Reef", "biome": "desert", "biome_color": "#f4a460" },
-          "newguinea": { "continent": "Australia/Oceania", "name": "Papua New Guinea", "bio": "Papua New Guinea is one of the most culturally diverse countries in the world, with over 800 indigenous languages spoken.", "quiz_question": "More than how many languages are indiginous to Papua New Guinea?", "quiz_answer": "800", "biome": "rainforest", "biome_color": "#2e8b57" },
+          "newguinea": { "continent": "Australia/Oceania", "name": "Papua New Guinea", "bio": "Papua New Guinea is one of the most culturally diverse countries in the world, with over 800 indigenous languages spoken.", "quiz_question": "More than how many languages are indigenous to Papua New Guinea?", "quiz_answer": "800", "biome": "rainforest", "biome_color": "#2e8b57" },
           "solomonislands": { "continent": "Australia/Oceania", "name": "Solomon Islands", "bio": "The Solomon Islands are a nation of hundreds of islands, known for their pivotal role in World War II and their incredible scuba diving sites.", "quiz_question": "What major historical conflict had significant battles in the Solomon Islands?", "quiz_answer": "World War II", "biome": "rainforest", "biome_color": "#2e8b57" },
           "vanuatu": { "continent": "Australia/Oceania", "name": "Vanuatu", "bio": "Vanuatu is an archipelago famous for its active volcanoes, including Mount Yasur, and is the birthplace of bungee jumping.", "quiz_question": "What modern extreme sport originated as a ritual in Vanuatu?", "quiz_answer": "Bungee jumping", "biome": "rainforest", "biome_color": "#2e8b57" },
           "fiji": { "continent": "Australia/Oceania", "name": "Fiji", "bio": "Fiji is an archipelago of more than 300 islands, famous for its rugged landscapes, coral reefs, and as a major producer of bottled water.", "quiz_question": "What beverage is a major export for Fiji?", "quiz_answer": "Bottled water", "biome": "rainforest", "biome_color": "#2e8b57" },
@@ -599,6 +599,12 @@
 
             function getVisualCenter(layer) {
                 const feature = layer.feature;
+                const countryName = feature.properties.name;
+
+                if (countryName === 'Russia') {
+                    return L.latLng(60, 100); // Manually set center for Russia to avoid exclave issues
+                }
+                
                 let center = layer.getBounds().getCenter(); 
                 if (feature.geometry.type === 'MultiPolygon') {
                     let largestArea = 0;
@@ -853,7 +859,6 @@
                 selectedCountryLayer = layer;
                 applyTheme(theme);
                 layer.bringToFront();
-                smartFitBounds(layer);
 
                 learnBtn.classList.add('hidden'); // Hide the main explore button
                 keepExploringBtn.classList.add('hidden'); // Ensure keep exploring is hidden initially
@@ -877,6 +882,7 @@
                 }
 
                 countryInfoPanel.classList.remove('opacity-0', '-translate-x-4', 'pointer-events-none');
+                smartFitBounds(layer);
             }
 
             function showQuiz(question, correctAnswer) {
@@ -1137,6 +1143,39 @@
                 const lonSpan = Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng);
                 const countryName = layer.feature.properties.name;
 
+                if (quizState === 'explore' && window.innerWidth >= 768) { // md breakpoint
+                    const panelWidth = 420; // A good estimate for max-w-sm (384px) + p-6 (48px)
+                    const targetCenter = getVisualCenter(layer);
+                    
+                    let targetZoom;
+                    if (countryName === 'Russia') {
+                        targetZoom = 2;
+                    } else if (lonSpan > 180) { // Handle countries crossing the date line like Fiji
+                        targetZoom = 4;
+                    } else {
+                        // Use flyToBounds to determine the best zoom, but don't actually fly
+                        targetZoom = map.getBoundsZoom(bounds);
+                        const latSpan = bounds.getNorth() - bounds.getSouth();
+                        const lngSpan = bounds.getEast() - bounds.getWest();
+                        const size = latSpan * lngSpan;
+                        let maxZoomLevel = 4;
+                        if (size < 50) maxZoomLevel = 5;
+                        if (size < 5) maxZoomLevel = 6;
+                        targetZoom = Math.min(targetZoom, maxZoomLevel);
+                    }
+
+                    // Calculate the new center point with an offset to account for the panel
+                    const centerPoint = map.project(targetCenter, targetZoom);
+                    const mapSize = map.getSize();
+                    const pixelOffset = panelWidth / 2;
+                    const newCenterPoint = centerPoint.subtract(new L.Point(pixelOffset, 0));
+                    const newLatLng = map.unproject(newCenterPoint, targetZoom);
+
+                    map.flyTo(newLatLng, targetZoom);
+                    return;
+                }
+
+                // --- Fallback for other modes or small screens ---
                 if (playStyle === 'sprint') {
                     if (countryName === 'Russia') map.flyTo(getVisualCenter(layer), 2);
                     else if (lonSpan > 180) map.flyTo(getVisualCenter(layer), 5);
