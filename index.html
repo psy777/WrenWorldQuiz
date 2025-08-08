@@ -83,8 +83,8 @@
         <header class="text-center mb-4 relative">
             <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map quiz-controls-container</h1>
             <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
+            <div id="explored-counter" class="hidden my-2 md:my-0 md:absolute md:top-0 md:right-0 bg-green-100 text-green-800 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md"></div>
             <button id="back-to-quiz-btn" class="hidden absolute top-0 left-0 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
-            <div id="explored-counter" class="hidden absolute top-0 right-0 bg-green-100 text-green-800 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md"></div>
             <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
         </header>
 
@@ -434,6 +434,60 @@
             let quizSequence = [];
             let currentSequenceIndex = -1;
             let exploredCountries = {};
+            const PROGRESS_KEY = 'worldQuizProgress';
+
+            // --- LOCALSTORAGE FUNCTIONS ---
+            function saveProgress() {
+                try {
+                    const progress = {
+                        exploredCountries,
+                        userAnswers,
+                        score,
+                        quizState,
+                        playStyle,
+                        difficulty,
+                        tabOrder,
+                        theme,
+                        quizSequence: quizSequence.map(c => c.name), // Save names instead of layers
+                        currentSequenceIndex,
+                        quizStartTime,
+                        zenTimeElapsed,
+                        timeRemaining,
+                    };
+                    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+                } catch (e) {
+                    console.error("Could not save progress:", e);
+                }
+            }
+
+            function loadProgress() {
+                try {
+                    const savedProgress = localStorage.getItem(PROGRESS_KEY);
+                    if (savedProgress) {
+                        const progress = JSON.parse(savedProgress);
+                        exploredCountries = progress.exploredCountries || {};
+                        userAnswers = progress.userAnswers || {};
+                        score = progress.score || 0;
+                        quizState = progress.quizState || 'explore';
+                        playStyle = progress.playStyle || 'explore';
+                        difficulty = progress.difficulty || 'normal';
+                        tabOrder = progress.tabOrder || 'random';
+                        theme = progress.theme || 'voyager';
+                        quizStartTime = progress.quizStartTime || 0;
+                        zenTimeElapsed = progress.zenTimeElapsed || 0;
+                        timeRemaining = progress.timeRemaining; // Can be undefined, that's ok
+                        
+                        if (progress.quizSequence) {
+                            // We need to wait for allCountries to be populated before we can map names back to layers
+                            // This will be handled after the geojson fetch.
+                            return progress.quizSequence; 
+                        }
+                    }
+                } catch (e) {
+                    console.error("Could not load progress:", e);
+                }
+                return null;
+            }
             
             // --- SCORING AND COMBO STATE ---
             let score = 0;
@@ -656,9 +710,31 @@
                     allCountries.sort((a, b) => a.name.localeCompare(b.name));
                     countryPath = pathData.toLowerCase().split(/\s+/);
                     
-                    // Set default mode to Explore
+                    const savedQuizSequence = loadProgress();
+                    
+                    if (savedQuizSequence) {
+                        const countryMap = new Map(allCountries.map(c => [c.name, c]));
+                        quizSequence = savedQuizSequence.map(name => countryMap.get(name)).filter(Boolean);
+                    }
+
+                    // Set UI based on loaded state
                     applyTheme(theme, true);
-                    updatePlayStyleUI('explore');
+                    updatePlayStyleUI(playStyle);
+                    
+                    // Restore settings UI
+                    document.querySelectorAll('#play-style-options button, #tab-order-options button, #difficulty-options button, #theme-options button').forEach(btn => {
+                        const container = btn.parentElement;
+                        const settingValue = container.id === 'play-style-options' ? playStyle :
+                                             container.id === 'tab-order-options' ? tabOrder :
+                                             container.id === 'difficulty-options' ? difficulty : theme;
+                        if (btn.dataset.value === settingValue) {
+                             handleSettingClick({ target: btn }, container.id);
+                        }
+                    });
+
+                    if (quizState === 'playing') {
+                        resumeQuiz();
+                    }
                 });
 
             // --- THEME LOGIC ---
@@ -915,6 +991,7 @@
                     if (!exploredCountries[name]) {
                         exploredCountries[name] = true;
                         updateExploredCounter();
+                        saveProgress(); // Save progress after exploring a new country
                     }
                     
                     quizAnswerInput.disabled = true;
@@ -1320,6 +1397,9 @@
                     clearInterval(hintRevealInterval);
                     userAnswers[correctName] = true;
                     if (playStyle === 'sprint') processCorrectGuessForCombo(guess, correctName);
+                    else {
+                        handleScoring(guess, correctName);
+                    }
                     
                     let styleKey;
                     if (theme === 'earth') {
@@ -1336,6 +1416,8 @@
                     guessInput.value = '';
                     guessInput.placeholder = `Correct!`;
                     
+                    saveProgress();
+
                     setTimeout(() => {
                         if (playStyle === 'paced') startPacedTimer(true);
                         else selectNextCountry();
@@ -1353,6 +1435,11 @@
             }
 
             function handleScoring(guess, correctName) {
+                if (playStyle !== 'sprint') { // Scoring for non-sprint modes
+                    score = Object.keys(userAnswers).length;
+                    updateScoreDisplay();
+                    return;
+                }
                 const basePoints = 100;
                 let accuracyBonus = 50;
                 if (difficulty !== 'mirror') {
@@ -1388,7 +1475,13 @@
                 if(progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
             }
 
-            function updateScoreDisplay() { scoreDisplay.textContent = `Score: ${score}`; }
+            function updateScoreDisplay() { 
+                if (playStyle === 'sprint') {
+                    scoreDisplay.textContent = `Score: ${score}`; 
+                } else if (quizState === 'playing') {
+                    scoreDisplay.textContent = `Guessed: ${Object.keys(userAnswers).length}/${allCountries.length}`;
+                }
+            }
 
             function updateComboMeter() {
                 timerDisplay.classList.remove('combo-heat-max');
@@ -1616,6 +1709,8 @@
                 } else {
                     finalTotalScoreDisplay.classList.add('hidden');
                 }
+                
+                localStorage.removeItem(PROGRESS_KEY); // Clear progress after finishing
 
                 scoreModal.classList.remove('hidden');
                 scoreModal.classList.add('flex');
@@ -1710,6 +1805,11 @@
                 updateComboMeter();
                 if (progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
                 updateTimerDisplay();
+                
+                // Clear progress from localStorage
+                localStorage.removeItem(PROGRESS_KEY);
+                // Then save the now-cleared state (which is effectively empty)
+                saveProgress();
             }
             
             document.addEventListener('keydown', (e) => {
@@ -1730,6 +1830,52 @@
                     }
                 }
             });
+
+            function resumeQuiz() {
+                quizState = 'playing';
+                startQuizBtn.classList.add('hidden');
+                settingsPanel.classList.add('disabled');
+                finishAttemptBtn.style.display = 'inline-block';
+                finishAttemptBtn.disabled = Object.keys(userAnswers).length === 0;
+                guessInput.classList.remove('hidden');
+                
+                if (difficulty === 'mirror') {
+                    subtitle.textContent = "Click the prompted country on the map.";
+                    guessInput.readOnly = true;
+                } else {
+                    subtitle.textContent = "Click a country or press Tab for a new one!";
+                    guessInput.readOnly = false;
+                }
+
+                if (!progressBarLength) {
+                    progressBarLength = timerProgressBar.getTotalLength();
+                    timerProgressBar.style.strokeDasharray = progressBarLength;
+                    timerProgressBar.style.strokeDashoffset = progressBarLength;
+                }
+                
+                scoreDisplay.classList.remove('hidden');
+                updateScoreDisplay();
+                
+                statusDisplayContainer.classList.remove('hidden');
+                if (playStyle === 'timed' || playStyle === 'zen') startTimer();
+                
+                const lastCountry = quizSequence[currentSequenceIndex];
+                if (lastCountry && lastCountry.layer) {
+                    if (difficulty === 'mirror') {
+                        promptNextMirrorCountry(); // This will find the correct next one
+                    } else {
+                        selectCountry(lastCountry.layer);
+                        smartFitBounds(lastCountry.layer);
+                    }
+                } else {
+                     if (difficulty === 'mirror') promptNextMirrorCountry();
+                     else selectNextCountry();
+                }
+
+                if (playStyle === 'paced') {
+                    startPacedTimer(false); // Don't move to next, just start timer
+                }
+            }
 
             // --- TIMER LOGIC ---
             let pacedTimeRemaining;
