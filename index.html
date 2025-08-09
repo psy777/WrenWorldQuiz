@@ -328,7 +328,7 @@
         </p>
     </footer>
     <script>
-        // Inlined country data to avoid fetch error
+        // Fallback country data if countries.json fails to load
         const countriesJsonData = {
           "canada": { "continent": "North America", "name": "Canada", "bio": "Canada has the longest coastline in the world, bordering three different oceans: the Atlantic, Pacific, and Arctic.", "quiz_question": "How many oceans does Canada's coastline border?", "quiz_answer": "Three", "biome": "forest", "biome_color": "#228b22" },
           "usa": { "continent": "North America", "name": "USA", "bio": "The United States is home to the world's largest economy and a diverse range of ecosystems, from deserts to lush forests.", "quiz_question": "What describes the range of ecosystems in the United States?", "quiz_answer": "diverse", "biome": "temperate", "biome_color": "#6b8e23" },
@@ -942,10 +942,12 @@
             }
 
             // --- DATA FETCHING AND INITIALIZATION ---
-            fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
-                .then(res => res.json())
-                .then(geoData => {
-                    countryDetails = countriesJsonData; // Use the inlined JSON data
+            Promise.all([
+                fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json').then(res => res.json()),
+                fetch('countries.json').then(res => res.json()).catch(() => countriesJsonData)
+            ])
+                .then(([geoData, countryJson]) => {
+                    countryDetails = countryJson;
 
                     geoData.features.forEach(feature => {
                         const originalName = feature.properties.name;
@@ -998,7 +1000,8 @@
                     if (quizState === 'playing') {
                         resumeQuiz();
                     }
-                });
+                })
+                .catch(err => console.error('Error loading data:', err));
 
             // --- THEME LOGIC ---
             function applyTheme(newThemeName, isInitial = false) {
