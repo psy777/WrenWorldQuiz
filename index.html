@@ -524,6 +524,8 @@
             let quizSequence = [];
             let currentSequenceIndex = -1;
             let exploredCountries = {};
+            let exploreSequence = [];
+            let exploreSequenceIndex = -1;
             const PROGRESS_KEY = 'worldQuizProgress';
             const PROFILE_STATS_KEY = 'worldQuizProfileStats';
 
@@ -1309,21 +1311,59 @@
                     checkQuizAnswer();
                 }
             });
-            
-            function exploreRandomCountry() {
-                const unexploredCountries = allCountries.filter(c => !exploredCountries[c.name]);
-                if (unexploredCountries.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * unexploredCountries.length);
-                    const randomCountry = unexploredCountries[randomIndex];
-                    if (randomCountry && randomCountry.layer) {
-                        showCountryInfo(randomCountry.layer);
-                        smartFitBounds(randomCountry.layer);
-                    }
-                } else {
-                    hideCountryInfoPanel();
-                    subtitle.textContent = "You've explored every country! Congratulations!";
-                    learnBtn.classList.add('hidden');
+
+            function initializeExploreSequence() {
+                const countries = allCountries.slice();
+                switch (tabOrder) {
+                    case 'alphabetical':
+                        exploreSequence = countries.sort((a, b) => a.name.localeCompare(b.name));
+                        break;
+                    case 'path':
+                        const addedCountries = new Set();
+                        exploreSequence = [];
+                        countryPath.forEach(pathName => {
+                            const countriesToAdd = countries.filter(c =>
+                                c.normalized === pathName ||
+                                countryAliases[pathName] === c.normalized ||
+                                (specialCases[pathName] && specialCases[pathName].includes(c.normalized))
+                            );
+                            countriesToAdd.forEach(country => {
+                                if (!addedCountries.has(country.name)) {
+                                    exploreSequence.push(country);
+                                    addedCountries.add(country.name);
+                                }
+                            });
+                        });
+                        exploreSequence.push(...countries.filter(c => !addedCountries.has(c.name)).sort((a, b) => a.name.localeCompare(b.name)));
+                        break;
+                    case 'random':
+                    default:
+                        for (let i = countries.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [countries[i], countries[j]] = [countries[j], countries[i]];
+                        }
+                        exploreSequence = countries;
+                        break;
                 }
+                exploreSequenceIndex = -1;
+            }
+
+            function exploreRandomCountry() {
+                if (exploreSequence.length === 0) {
+                    initializeExploreSequence();
+                }
+                for (let i = 0; i < exploreSequence.length; i++) {
+                    exploreSequenceIndex = (exploreSequenceIndex + 1) % exploreSequence.length;
+                    const nextCountry = exploreSequence[exploreSequenceIndex];
+                    if (!exploredCountries[nextCountry.name]) {
+                        showCountryInfo(nextCountry.layer);
+                        smartFitBounds(nextCountry.layer);
+                        return;
+                    }
+                }
+                hideCountryInfoPanel();
+                subtitle.textContent = "You've explored every country! Congratulations!";
+                learnBtn.classList.add('hidden');
             }
 
             learnBtn.addEventListener('click', exploreRandomCountry);
@@ -1810,7 +1850,8 @@
                     learnBtn.textContent = 'Explore'; // Reset button text
                     learnBtn.parentElement.classList.add('w-full', 'justify-center');
                     finishAttemptBtn.style.display = 'none';
-                    tabOrderOptions.parentElement.classList.add('disabled');
+                    tabOrderOptions.parentElement.classList.remove('disabled');
+                    initializeExploreSequence();
                     difficultyOptions.parentElement.classList.add('disabled');
                     statusDisplayContainer.classList.add('hidden');
                     hideCountryInfoPanel();
@@ -1838,7 +1879,12 @@
 
             tabOrderOptions.addEventListener('click', (e) => {
                 const value = handleSettingClick(e, 'tab-order-options');
-                if (value) tabOrder = value;
+                if (value) {
+                    tabOrder = value;
+                    if (playStyle === 'explore') {
+                        initializeExploreSequence();
+                    }
+                }
             });
             difficultyOptions.addEventListener('click', (e) => {
                 const value = handleSettingClick(e, 'difficulty-options');
