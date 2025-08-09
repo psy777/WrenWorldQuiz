@@ -1032,7 +1032,7 @@
                         } else if (name === 'Antarctica') {
                             styleKey = 'unclickable';
                         } else {
-                            const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                            const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
                             if (isAnswered) {
                                 styleKey = (theme === 'earth') ? `guessed_${getCountryBiome(name)}` : 'guessed';
                             } else {
@@ -1407,7 +1407,7 @@
 
             function highlightFeature(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
                 if (isAnswered || layer === selectedCountryLayer) return;
                 
                 const style = { weight: 3, color: getStyle('selected').color };
@@ -1418,7 +1418,7 @@
 
             function resetHighlight(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                const isAnswered = (quizState === 'explore') ? exploredCountries[name] : userAnswers[name];
                 
                 let styleKey = isAnswered ? 'guessed' : 'default';
                 if (isAnswered && theme === 'earth') {
