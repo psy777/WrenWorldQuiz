@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qirra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Dongle:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --p1-color: #000000;
+            --p1-glow-color: #ffffff;
+            --p1-glow-size: 10px;
+            --p2-color: #ffffff;
+            --p2-glow-color: #00ffff;
+            --p2-glow-size: 10px;
+            --board-bg: #162447;
+            --cell-bg: #1f4068;
+            --cell-hover-bg: #1b3a5e;
+        }
+        body {
+            font-family: 'Dongle', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 1.75rem;
+            letter-spacing: 0.5px;
+        }
+        #game-title {
+            font-family: 'Cinzel', serif;
+        }
+        .board {
+            display: grid;
+            gap: 1px;
+            background-color: var(--board-bg);
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            pointer-events: none; /* Disabled until a match starts */
+            opacity: 0.5;
+        }
+        .board.active {
+            pointer-events: auto;
+            opacity: 1;
+        }
+        .cell {
+            position: relative;
+            background-color: var(--cell-bg);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .cell:hover {
+            background-color: var(--cell-hover-bg);
+        }
+        .stone {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            transition: border-radius 0.2s ease-in-out, background-color 0.3s, box-shadow 0.3s;
+        }
+        .black {
+            background-color: var(--p1-color);
+            box-shadow: 0 0 var(--p1-glow-size) var(--p1-glow-color);
+        }
+        .white {
+            background-color: var(--p2-color);
+            box-shadow: 0 0 var(--p2-glow-size) var(--p2-glow-color);
+        }
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .controls, .slider-control {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .btn {
+            background-color: var(--cell-bg);
+            color: #e0e0e0;
+            padding: 5px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, opacity 0.3s;
+            margin: 0 10px;
+            border: 2px solid transparent;
+            font-size: 1.5rem;
+        }
+        .btn:hover {
+            background-color: var(--cell-hover-bg);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 10px;
+            width: 350px;
+        }
+        #game-status, #online-count-container {
+            height: 2.5rem;
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        /* Modal Styles */
+        .modal {
+            position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.6);
+        }
+        .modal-content {
+            background-color: #1a1a2e; margin: 10% auto; padding: 20px;
+            border: 1px solid var(--p2-glow-color); border-radius: 10px;
+            width: 80%; max-width: 500px; box-shadow: 0 0 20px var(--p2-glow-color);
+            position: relative;
+        }
+        .close-btn {
+            color: #aaa; position: absolute; top: 10px; right: 25px;
+            font-size: 2.5rem; font-weight: bold; cursor: pointer;
+        }
+        .close-btn:hover, .close-btn:focus { color: white; }
+        .settings-grid { display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center; }
+        .settings-grid h3 {
+            grid-column: 1 / -1; font-family: 'Cinzel', serif; color: var(--p2-glow-color);
+            border-bottom: 1px solid var(--p2-glow-color); padding-bottom: 5px;
+        }
+        input[type=range] { -webkit-appearance: none; background: transparent; cursor: pointer; width: 100%; }
+        input[type=range]::-webkit-slider-runnable-track { height: 8px; background: var(--cell-bg); border-radius: 5px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: var(--p2-glow-color); margin-top: -8px; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+    <h1 id="game-title" class="text-5xl font-bold mb-4">Qirra</h1>
+    <div class="controls-container mb-4">
+        <div class="slider-control">
+            <label for="size-slider" class="mr-4">Size:</label>
+            <input type="range" id="size-slider" min="5" max="25" value="9">
+            <span id="size-label" class="ml-4 w-16 text-center">9x9</span>
+        </div>
+    </div>
+    <div id="online-count-container">Players Online: <span id="online-count">0</span></div>
+    <div id="game-status">Ready to play.</div>
+    <div class="scoreboard">
+        <div>Player 1: <span id="black-score">0</span></div>
+        <div>Player 2: <span id="white-score">0</span></div>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="controls">
+        <div class="btn" id="matchmaking-btn">Find Match</div>
+        <div class="btn" id="pass-btn" disabled>Pass</div>
+        <div class="btn" id="settings-btn">Settings</div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <span id="close-modal" class="close-btn">&times;</span>
+            <h2 class="text-3xl mb-4" style="font-family: 'Cinzel', serif;">Settings</h2>
+            <div class="settings-grid">
+                <h3>Player 1</h3>
+                <label for="p1-color-picker">Tile Color</label> <input type="color" id="p1-color-picker" value="#000000">
+                <label for="p1-glow-color-picker">Glow Color</label> <input type="color" id="p1-glow-color-picker" value="#ffffff">
+                <label for="p1-glow-size-slider">Glow Size</label> <input type="range" id="p1-glow-size-slider" min="0" max="20" value="10">
+                <h3>Player 2</h3>
+                <label for="p2-color-picker">Tile Color</label> <input type="color" id="p2-color-picker" value="#ffffff">
+                <label for="p2-glow-color-picker">Glow Color</label> <input type="color" id="p2-glow-color-picker" value="#00ffff">
+                <label for="p2-glow-size-slider">Glow Size</label> <input type="range" id="p2-glow-size-slider" min="0" max="20" value="10">
+                <h3>Board</h3>
+                <label for="board-bg-picker">Board Color</label> <input type="color" id="board-bg-picker" value="#162447">
+                <label for="cell-bg-picker">Cell Color</label> <input type="color" id="cell-bg-picker" value="#1f4068">
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getDatabase, ref, onValue, set, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        // DOM Elements
+        const boardEl = document.getElementById('board');
+        const p1ScoreEl = document.getElementById('black-score');
+        const p2ScoreEl = document.getElementById('white-score');
+        const passBtn = document.getElementById('pass-btn');
+        const matchmakingBtn = document.getElementById('matchmaking-btn');
+        const sizeSlider = document.getElementById('size-slider');
+        const sizeLabel = document.getElementById('size-label');
+        const statusEl = document.getElementById('game-status');
+        const onlineCountEl = document.getElementById('online-count');
+
+        // --- Firebase Setup ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'qirra-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const rtdb = getDatabase(app); // Realtime Database for presence
+        const auth = getAuth(app);
+
+        // --- Game State ---
+        let localState = {
+            boardSize: 9,
+            boardData: [],
+            p1Score: 0,
+            p2Score: 0,
+            currentPlayerId: null,
+            players: [],
+            passCount: 0,
+            previousStates: [],
+        };
+        let currentGameId = null;
+        let unsubscribeGame = null;
+        let unsubscribeWaiting = null;
+
+        // --- Core Game Logic ---
+        async function initializeAppLogic() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Authenticated with UID:", auth.currentUser.uid);
+                setupPresence(); // Set up online status
+                matchmakingBtn.disabled = false;
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                statusEl.textContent = "Error: Could not connect.";
+            }
+            setupUI();
+        }
+
+        function setupPresence() {
+            const myStatusRef = ref(rtdb, 'status/' + auth.currentUser.uid);
+            // Use onDisconnect to set the user's status to offline when they disconnect.
+            onDisconnect(myStatusRef).remove();
+            // Set the user's status to online.
+            set(myStatusRef, true);
+
+            // Listen for changes in the number of online users.
+            const statusRef = ref(rtdb, 'status');
+            onValue(statusRef, (snapshot) => {
+                const count = snapshot.numChildren();
+                onlineCountEl.textContent = count;
+            });
+        }
+
+        function setupUI() {
+            createBoard();
+            matchmakingBtn.addEventListener('click', findMatch);
+            passBtn.addEventListener('click', handlePass);
+            sizeSlider.addEventListener('input', e => sizeLabel.textContent = `${e.target.value}x${e.target.value}`);
+            sizeSlider.addEventListener('change', e => {
+                if (!currentGameId) { // Only allow size change if not in a game
+                    localState.boardSize = parseInt(e.target.value);
+                    createBoard();
+                }
+            });
+        }
+
+        async function findMatch() {
+            if (unsubscribeWaiting) unsubscribeWaiting();
+            matchmakingBtn.disabled = true;
+            statusEl.textContent = "Searching for an opponent...";
+            
+            const waitingPoolRef = collection(db, `artifacts/${appId}/public/data/waiting_pool`);
+            const q = query(waitingPoolRef, limit(1));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                // No one is waiting, so we wait
+                const myWaitingRef = doc(db, `artifacts/${appId}/public/data/waiting_pool`, auth.currentUser.uid);
+                await setDoc(myWaitingRef, { waitingSince: new Date(), boardSize: localState.boardSize });
+                
+                // Listen for our waiting doc to be deleted, which means we've been matched
+                unsubscribeWaiting = onSnapshot(myWaitingRef, (doc) => {
+                    if (!doc.exists()) {
+                        statusEl.textContent = "Opponent found! Starting game...";
+                        if(unsubscribeWaiting) unsubscribeWaiting();
+                    }
+                });
+
+            } else {
+                // Found a waiting player, let's start a game
+                const opponentDoc = querySnapshot.docs[0];
+                const opponentId = opponentDoc.id;
+                const opponentData = opponentDoc.data();
+
+                // Delete opponent from waiting pool
+                await deleteDoc(opponentDoc.ref);
+
+                const newGameId = `game_${auth.currentUser.uid}_${opponentId}`;
+                const players = [auth.currentUser.uid, opponentId];
+                const boardSize = opponentData.boardSize || 9;
+
+                const newGameData = {
+                    players,
+                    boardSize,
+                    boardData: Array(boardSize * boardSize).fill(null),
+                    p1Score: 0,
+                    p2Score: 0,
+                    currentPlayerId: players[0],
+                    passCount: 0,
+                    previousStates: [],
+                    createdAt: new Date()
+                };
+
+                await setDoc(doc(db, `artifacts/${appId}/public/data/games`, newGameId), newGameData);
+                joinGame(newGameId);
+            }
+        }
+        
+        function joinGame(gameId) {
+            currentGameId = gameId;
+            if (unsubscribeGame) unsubscribeGame();
+
+            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameId);
+            unsubscribeGame = onSnapshot(gameRef, (doc) => {
+                if (doc.exists()) {
+                    const gameData = doc.data();
+                    updateLocalState(gameData);
+                    renderGame();
+                } else {
+                    // Game was deleted (e.g., opponent left)
+                    endGame("Opponent left the game.");
+                }
+            });
+        }
+
+        function updateLocalState(gameData) {
+            localState = { ...localState, ...gameData };
+        }
+
+        function renderGame() {
+            if (localState.boardSize !== parseInt(boardEl.style.gridTemplateColumns.split('(')[1])) {
+                createBoard();
+            }
+            renderBoard();
+            p1ScoreEl.textContent = localState.p1Score;
+            p2ScoreEl.textContent = localState.p2Score;
+
+            const myTurn = localState.currentPlayerId === auth.currentUser.uid;
+            const amPlayer1 = localState.players[0] === auth.currentUser.uid;
+            const myRole = amPlayer1 ? 'Player 1' : 'Player 2';
+
+            statusEl.textContent = myTurn ? `Your turn (${myRole})` : `Opponent's turn...`;
+            boardEl.classList.add('active');
+            passBtn.disabled = !myTurn;
+            matchmakingBtn.disabled = true;
+            sizeSlider.disabled = true;
+        }
+
+        function createBoard() {
+            boardEl.innerHTML = '';
+            boardEl.style.gridTemplateColumns = `repeat(${localState.boardSize}, 1fr)`;
+            boardEl.style.gridTemplateRows = `repeat(${localState.boardSize}, 1fr)`;
+            const boardPixelWidth = Math.min(window.innerWidth, window.innerHeight) * 0.6;
+            boardEl.style.width = `${boardPixelWidth}px`;
+            boardEl.style.height = `${boardPixelWidth}px`;
+            for (let i = 0; i < localState.boardSize * localState.boardSize; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', handleCellClick);
+                boardEl.appendChild(cell);
+            }
+        }
+
+        function renderBoard() {
+            Array.from(boardEl.children).forEach((cell, i) => {
+                if (cell.firstChild) cell.removeChild(cell.firstChild);
+                if (localState.boardData[i]) {
+                    const stone = document.createElement('div');
+                    const playerClass = localState.boardData[i]; // 'black' or 'white'
+                    stone.classList.add('stone', playerClass);
+                    stone.style.borderRadius = getBorderRadiusForStone(i);
+                    cell.appendChild(stone);
+                }
+            });
+        }
+
+        async function handleCellClick(e) {
+            if (localState.currentPlayerId !== auth.currentUser.uid) return; // Not my turn
+
+            const index = parseInt(e.currentTarget.dataset.index);
+            if (localState.boardData[index]) return; // Cell is not empty
+
+            const playerColor = localState.players.indexOf(auth.currentUser.uid) === 0 ? 'black' : 'white';
+            let newState = { ...localState };
+            let tempBoard = [...newState.boardData];
+            tempBoard[index] = playerColor;
+            
+            // --- Game Rule Logic (applied to temp state) ---
+            const opponentColor = playerColor === 'black' ? 'white' : 'black';
+            let capturedStones = 0;
+            
+            // Check opponent captures
+            getNeighbors(index, newState.boardSize).forEach(n => {
+                if (tempBoard[n] === opponentColor) {
+                    const group = getGroup(n, tempBoard, newState.boardSize);
+                    if (hasNoLiberties(group, tempBoard, newState.boardSize)) {
+                        capturedStones += group.length;
+                        group.forEach(i => tempBoard[i] = null);
+                    }
+                }
+            });
+
+            // Check for suicide
+            const ownGroup = getGroup(index, tempBoard, newState.boardSize);
+            if (hasNoLiberties(ownGroup, tempBoard, newState.boardSize)) {
+                alert("Suicide moves are not allowed.");
+                return;
+            }
+
+            // Check for Ko rule
+            const stateString = tempBoard.join('');
+            if (newState.previousStates.includes(stateString)) {
+                alert("Move is not allowed due to the Ko rule.");
+                return;
+            }
+
+            // --- Update Firestore ---
+            const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
+            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+            
+            if (playerColor === 'black') newState.p1Score += capturedStones;
+            else newState.p2Score += capturedStones;
+
+            await updateDoc(gameRef, {
+                boardData: tempBoard,
+                currentPlayerId: nextPlayerId,
+                passCount: 0,
+                p1Score: newState.p1Score,
+                p2Score: newState.p2Score,
+                previousStates: [...newState.previousStates, stateString]
+            });
+        }
+
+        async function handlePass() {
+            if (localState.currentPlayerId !== auth.currentUser.uid) return;
+            
+            const newPassCount = localState.passCount + 1;
+            if (newPassCount >= 2) {
+                endGame("Game over. Both players passed.");
+            } else {
+                const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
+                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+                await updateDoc(gameRef, {
+                    currentPlayerId: nextPlayerId,
+                    passCount: newPassCount
+                });
+            }
+        }
+
+        function endGame(message) {
+            alert(message);
+            if (unsubscribeGame) unsubscribeGame();
+            if (currentGameId) {
+                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+                // Optional: could delete game doc after a delay
+                // deleteDoc(gameRef);
+            }
+            currentGameId = null;
+            boardEl.classList.remove('active');
+            passBtn.disabled = true;
+            matchmakingBtn.disabled = false;
+            sizeSlider.disabled = false;
+            statusEl.textContent = "Ready to play.";
+        }
+
+        // --- Helper Functions (no changes needed) ---
+        function getBorderRadiusForStone(index) {
+            const color = localState.boardData[index];
+            if (!color) return '50%';
+            const { boardSize, boardData } = localState;
+            const x = index % boardSize;
+            const y = Math.floor(index / boardSize);
+            const hasTopNeighbor = y > 0 && boardData[index - boardSize] === color;
+            const hasRightNeighbor = x < boardSize - 1 && boardData[index + 1] === color;
+            const hasBottomNeighbor = y < boardSize - 1 && boardData[index + boardSize] === color;
+            const hasLeftNeighbor = x > 0 && boardData[index - 1] === color;
+            const round = '50%', flat = '20%';
+            const topLeft = (hasTopNeighbor || hasLeftNeighbor) ? flat : round;
+            const topRight = (hasTopNeighbor || hasRightNeighbor) ? flat : round;
+            const bottomRight = (hasBottomNeighbor || hasRightNeighbor) ? flat : round;
+            const bottomLeft = (hasBottomNeighbor || hasLeftNeighbor) ? flat : round;
+            return `${topLeft} ${topRight} ${bottomRight} ${bottomLeft}`;
+        }
+        function getNeighbors(index, boardSize) {
+            const neighbors = [];
+            const x = index % boardSize, y = Math.floor(index / boardSize);
+            if (x > 0) neighbors.push(index - 1);
+            if (x < boardSize - 1) neighbors.push(index + 1);
+            if (y > 0) neighbors.push(index - boardSize);
+            if (y < boardSize - 1) neighbors.push(index + boardSize);
+            return neighbors;
+        }
+        function getGroup(startIndex, boardData, boardSize) {
+            if (boardData[startIndex] === null) return [];
+            const group = new Set([startIndex]), queue = [startIndex], color = boardData[startIndex], visited = new Set([startIndex]);
+            while (queue.length > 0) {
+                const currentIndex = queue.shift();
+                getNeighbors(currentIndex, boardSize).forEach(neighborIndex => {
+                    if (!visited.has(neighborIndex) && boardData[neighborIndex] === color) {
+                        visited.add(neighborIndex);
+                        group.add(neighborIndex);
+                        queue.push(neighborIndex);
+                    }
+                });
+            }
+            return Array.from(group);
+        }
+        function hasNoLiberties(group, boardData, boardSize) {
+            if (group.length === 0) return false;
+            for (const stoneIndex of group) {
+                if (getNeighbors(stoneIndex, boardSize).some(neighborIndex => boardData[neighborIndex] === null)) return false;
+            }
+            return true;
+        }
+
+        // --- Settings Modal (no changes needed) ---
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+        window.addEventListener('click', e => { if (e.target == settingsModal) settingsModal.classList.add('hidden'); });
+        const setCssVar = (name, value) => document.documentElement.style.setProperty(name, value);
+        function darkenColor(hex, percent) {
+            hex = hex.replace(/^#/, '');
+            if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
+            const num = parseInt(hex, 16), amt = Math.round(2.55 * percent);
+            const R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
+            return `#${(0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1)}`;
+        }
+        document.getElementById('p1-color-picker').addEventListener('input', e => setCssVar('--p1-color', e.target.value));
+        document.getElementById('p1-glow-color-picker').addEventListener('input', e => setCssVar('--p1-glow-color', e.target.value));
+        document.getElementById('p1-glow-size-slider').addEventListener('input', e => setCssVar('--p1-glow-size', e.target.value + 'px'));
+        document.getElementById('p2-color-picker').addEventListener('input', e => setCssVar('--p2-color', e.target.value));
+        document.getElementById('p2-glow-color-picker').addEventListener('input', e => setCssVar('--p2-glow-color', e.target.value));
+        document.getElementById('p2-glow-size-slider').addEventListener('input', e => setCssVar('--p2-glow-size', e.target.value + 'px'));
+        document.getElementById('board-bg-picker').addEventListener('input', e => setCssVar('--board-bg', e.target.value));
+        document.getElementById('cell-bg-picker').addEventListener('input', e => {
+            const newColor = e.target.value;
+            setCssVar('--cell-bg', newColor);
+            setCssVar('--cell-hover-bg', darkenColor(newColor, 10));
+        });
+        
+        // --- App Initialization ---
+        initializeAppLogic();
+
+    </script>
+</body>
+</html>
