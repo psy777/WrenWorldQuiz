@@ -205,6 +205,22 @@
 
         // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'qirra-default';
+        lafe0z-codex/fix-board-drawing-issue-in-index.html
+        let firebaseConfig = {};
+        if (typeof __firebase_config !== 'undefined') {
+            if (typeof __firebase_config === 'string') {
+                try {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } catch (err) {
+                    console.warn('Failed to parse __firebase_config string:', err);
+                }
+            } else if (typeof __firebase_config === 'object' && __firebase_config !== null) {
+                firebaseConfig = __firebase_config;
+            } else {
+                console.warn('Unexpected __firebase_config type:', typeof __firebase_config);
+            }
+        }
+
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         let app, db, rtdb, auth;
 
