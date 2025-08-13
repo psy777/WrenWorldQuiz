@@ -145,8 +145,8 @@
     <div class="controls-container mb-4">
         <div class="slider-control">
             <label for="size-slider" class="mr-4">Size:</label>
-            <input type="range" id="size-slider" min="5" max="25" value="9">
-            <span id="size-label" class="ml-4 w-16 text-center">9x9</span>
+            <input type="range" id="size-slider" min="5" max="25" value="8">
+            <span id="size-label" class="ml-4 w-16 text-center">8x8</span>
         </div>
         <input id="match-code" type="text" placeholder="Match code (optional)" class="mt-2 p-2 rounded bg-[var(--cell-bg)] text-center" />
     </div>
@@ -159,6 +159,7 @@
     <div class="board" id="board"></div>
     <div class="controls">
         <div class="btn" id="matchmaking-btn">Find Match</div>
+        <div class="btn" id="offline-btn">Play Offline</div>
         <div class="btn" id="pass-btn" disabled>Pass</div>
         <div class="btn" id="settings-btn">Settings</div>
     </div>
@@ -197,6 +198,7 @@
         const p2ScoreEl = document.getElementById('white-score');
         const passBtn = document.getElementById('pass-btn');
         const matchmakingBtn = document.getElementById('matchmaking-btn');
+        const offlineBtn = document.getElementById('offline-btn');
         const sizeSlider = document.getElementById('size-slider');
         const sizeLabel = document.getElementById('size-label');
         const statusEl = document.getElementById('game-status');
@@ -228,14 +230,16 @@
 
         // --- Game State ---
         let localState = {
-            boardSize: 9,
+            boardSize: 8,
             boardData: [],
             p1Score: 0,
             p2Score: 0,
-            currentPlayerId: null,
-            players: [],
+            currentPlayerId: 'player1', // Start with player1 in offline mode
+            players: ['player1', 'player2'], // Default offline players
             passCount: 0,
             previousStates: [],
+            isOfflineMode: false,
+            gameStarted: false
         };
         let currentGameId = null;
         let unsubscribeGame = null;
@@ -281,10 +285,11 @@
         function setupUI() {
             createBoard();
             matchmakingBtn.addEventListener('click', findMatch);
+            offlineBtn.addEventListener('click', startOfflineGame);
             passBtn.addEventListener('click', handlePass);
             sizeSlider.addEventListener('input', e => sizeLabel.textContent = `${e.target.value}x${e.target.value}`);
             sizeSlider.addEventListener('change', e => {
-                if (!currentGameId) { // Only allow size change if not in a game
+                if (!currentGameId && !localState.gameStarted) { // Only allow size change if not in a game
                     localState.boardSize = parseInt(e.target.value);
                     createBoard();
                 }
@@ -458,12 +463,22 @@
         }
 
         async function handleCellClick(e) {
-            if (localState.currentPlayerId !== auth.currentUser.uid) return; // Not my turn
+            // Check if it's the current player's turn
+            if (localState.isOfflineMode) {
+                // In offline mode, allow any player to play
+            } else {
+                if (localState.currentPlayerId !== auth.currentUser.uid) return; // Not my turn in online mode
+            }
 
             const index = parseInt(e.currentTarget.dataset.index);
             if (localState.boardData[index]) return; // Cell is not empty
 
-            const playerColor = localState.players.indexOf(auth.currentUser.uid) === 0 ? 'black' : 'white';
+            let playerColor;
+            if (localState.isOfflineMode) {
+                playerColor = localState.currentPlayerId === 'player1' ? 'black' : 'white';
+            } else {
+                playerColor = localState.players.indexOf(auth.currentUser.uid) === 0 ? 'black' : 'white';
+            }
             
             // Create a temporary board to test the move
             let tempBoard = [...localState.boardData];
@@ -486,9 +501,14 @@
             // 2. Check for suicide
             const ownGroup = getGroup(index, tempBoard, localState.boardSize);
             if (hasNoLiberties(ownGroup, tempBoard, localState.boardSize)) {
-                // Using a custom modal/alert would be better than window.alert
                 statusEl.textContent = "Suicide moves are not allowed.";
-                setTimeout(() => { renderGame() }, 2000); // Reset status message
+                setTimeout(() => { 
+                    if (localState.isOfflineMode) {
+                        renderOfflineGame();
+                    } else {
+                        renderGame();
+                    }
+                }, 2000);
                 return;
             }
 
@@ -496,46 +516,85 @@
             const stateString = tempBoard.join('');
             if (localState.previousStates.includes(stateString)) {
                 statusEl.textContent = "Move is not allowed due to the Ko rule.";
-                setTimeout(() => { renderGame() }, 2000); // Reset status message
+                setTimeout(() => { 
+                    if (localState.isOfflineMode) {
+                        renderOfflineGame();
+                    } else {
+                        renderGame();
+                    }
+                }, 2000);
                 return;
             }
 
-            // --- If move is valid, update Firestore ---
-            const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
-            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
-            
+            // Update scores
             let newP1Score = localState.p1Score;
             let newP2Score = localState.p2Score;
             if (playerColor === 'black') newP1Score += capturedStones;
             else newP2Score += capturedStones;
 
-            await updateDoc(gameRef, {
-                boardData: tempBoard,
-                currentPlayerId: nextPlayerId,
-                passCount: 0, // Reset pass count on a valid move
-                p1Score: newP1Score,
-                p2Score: newP2Score,
-                previousStates: [...localState.previousStates.slice(-10), stateString] // Keep last 10 states
-            });
+            // Update local state
+            localState.boardData = tempBoard;
+            localState.p1Score = newP1Score;
+            localState.p2Score = newP2Score;
+            localState.passCount = 0; // Reset pass count on a valid move
+            localState.previousStates = [...localState.previousStates.slice(-10), stateString]; // Keep last 10 states
+
+            if (localState.isOfflineMode) {
+                // Switch players in offline mode
+                localState.currentPlayerId = localState.currentPlayerId === 'player1' ? 'player2' : 'player1';
+                renderOfflineGame();
+            } else {
+                // Update Firestore for online mode
+                const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
+                localState.currentPlayerId = nextPlayerId;
+                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+                
+                await updateDoc(gameRef, {
+                    boardData: tempBoard,
+                    currentPlayerId: nextPlayerId,
+                    passCount: 0,
+                    p1Score: newP1Score,
+                    p2Score: newP2Score,
+                    previousStates: localState.previousStates
+                });
+            }
         }
 
         async function handlePass() {
-            if (localState.currentPlayerId !== auth.currentUser.uid) return;
+            if (localState.isOfflineMode) {
+                // In offline mode, allow pass
+            } else {
+                if (localState.currentPlayerId !== auth.currentUser.uid) return; // Not my turn in online mode
+            }
             
             const newPassCount = localState.passCount + 1;
+            localState.passCount = newPassCount;
+            
             if (newPassCount >= 2) {
-                // Game ends, but we'll just announce it. The document won't be deleted.
-                const winner = localState.p1Score > localState.p2Score ? "Player 1 Wins!" : "Player 2 Wins!";
+                // Game ends
+                const winner = localState.p1Score > localState.p2Score ? "Player 1 Wins!" : 
+                              localState.p2Score > localState.p1Score ? "Player 2 Wins!" : "It's a tie!";
                 statusEl.textContent = `Game Over. ${winner}`;
-                if (unsubscribeGame) unsubscribeGame();
                 passBtn.disabled = true;
+                
+                if (!localState.isOfflineMode && unsubscribeGame) {
+                    unsubscribeGame();
+                }
             } else {
-                const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
-                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
-                await updateDoc(gameRef, {
-                    currentPlayerId: nextPlayerId,
-                    passCount: newPassCount
-                });
+                if (localState.isOfflineMode) {
+                    // Switch players in offline mode
+                    localState.currentPlayerId = localState.currentPlayerId === 'player1' ? 'player2' : 'player1';
+                    renderOfflineGame();
+                } else {
+                    // Update Firestore for online mode
+                    const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
+                    localState.currentPlayerId = nextPlayerId;
+                    const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+                    await updateDoc(gameRef, {
+                        currentPlayerId: nextPlayerId,
+                        passCount: newPassCount
+                    });
+                }
             }
         }
         
@@ -552,23 +611,78 @@
             resetToLobby();
         }
         
+        function startOfflineGame() {
+            // Reset game state for offline mode
+            localState = {
+                boardSize: parseInt(sizeSlider.value),
+                boardData: Array(parseInt(sizeSlider.value) * parseInt(sizeSlider.value)).fill(null),
+                p1Score: 0,
+                p2Score: 0,
+                currentPlayerId: 'player1',
+                players: ['player1', 'player2'],
+                passCount: 0,
+                previousStates: [],
+                isOfflineMode: true,
+                gameStarted: true
+            };
+            
+            createBoard();
+            renderOfflineGame();
+            
+            // Update UI for offline game
+            matchmakingBtn.textContent = 'End Game';
+            matchmakingBtn.onclick = endOfflineGame;
+            offlineBtn.style.display = 'none';
+            sizeSlider.disabled = true;
+            statusEl.textContent = "Player 1's turn (Black)";
+            boardEl.classList.add('active');
+            passBtn.disabled = false;
+        }
+
+        function renderOfflineGame() {
+            renderBoard();
+            p1ScoreEl.textContent = localState.p1Score;
+            p2ScoreEl.textContent = localState.p2Score;
+            
+            const currentPlayer = localState.currentPlayerId === 'player1' ? 'Player 1 (Black)' : 'Player 2 (White)';
+            statusEl.textContent = `${currentPlayer}'s turn`;
+            
+            passBtn.disabled = false;
+        }
+
+        function endOfflineGame() {
+            resetToLobby();
+        }
+
         function resetToLobby() {
             if (unsubscribeGame) unsubscribeGame();
             unsubscribeGame = null;
             currentGameId = null;
+            
+            // Reset offline mode state
+            localState.isOfflineMode = false;
+            localState.gameStarted = false;
             
             boardEl.classList.remove('active');
             passBtn.disabled = true;
             matchmakingBtn.textContent = 'Find Match';
             matchmakingBtn.disabled = false;
             matchmakingBtn.onclick = findMatch;
+            offlineBtn.style.display = 'inline-block';
             sizeSlider.disabled = false;
             statusEl.textContent = "Ready to play.";
             
             // Re-initialize board to default size
             localState.boardSize = parseInt(sizeSlider.value);
+            localState.boardData = Array(localState.boardSize * localState.boardSize).fill(null);
+            localState.p1Score = 0;
+            localState.p2Score = 0;
+            localState.passCount = 0;
+            localState.previousStates = [];
             createBoard();
             renderBoard(); // Render the empty board
+            p1ScoreEl.textContent = '0';
+            p2ScoreEl.textContent = '0';
         }
 
         // --- Helper Functions (no changes needed) ---
