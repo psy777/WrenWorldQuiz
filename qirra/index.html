@@ -135,7 +135,7 @@
             grid-column: 1 / -1; font-family: 'Cinzel', serif; color: var(--p2-glow-color);
             border-bottom: 1px solid var(--p2-glow-color); padding-bottom: 5px;
         }
-        input[type=range] { -webkit-appearance: none; background: transparent; cursor: pointer; width: 100%; }
+        input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; width: 100%; }
         input[type=range]::-webkit-slider-runnable-track { height: 8px; background: var(--cell-bg); border-radius: 5px; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: var(--p2-glow-color); margin-top: -8px; }
     </style>
@@ -205,25 +205,25 @@
 
         // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'qirra-default';
-        lafe0z-codex/fix-board-drawing-issue-in-index.html
         let firebaseConfig = {};
-        if (typeof __firebase_config !== 'undefined') {
+
+        // Check for the firebase config variable and parse it if it's a string
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
             if (typeof __firebase_config === 'string') {
                 try {
                     firebaseConfig = JSON.parse(__firebase_config);
                 } catch (err) {
-                    console.warn('Failed to parse __firebase_config string:', err);
+                    console.error('Failed to parse __firebase_config string:', err);
+                    statusEl.textContent = "Error: Invalid Firebase configuration.";
                 }
-            } else if (typeof __firebase_config === 'object' && __firebase_config !== null) {
+            } else if (typeof __firebase_config === 'object') {
                 firebaseConfig = __firebase_config;
             } else {
-                console.warn('Unexpected __firebase_config type:', typeof __firebase_config);
+                console.warn('__firebase_config is in an unexpected format:', typeof __firebase_config);
             }
         }
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         let app, db, rtdb, auth;
-
         matchmakingBtn.disabled = true;
 
         // --- Game State ---
@@ -269,16 +269,12 @@
 
         function setupPresence() {
             const myStatusRef = ref(rtdb, 'status/' + auth.currentUser.uid);
-            // Use onDisconnect to set the user's status to offline when they disconnect.
             onDisconnect(myStatusRef).remove();
-            // Set the user's status to online.
-            set(myStatusRef, true);
+            set(myStatusRef, { online: true });
 
-            // Listen for changes in the number of online users.
             const statusRef = ref(rtdb, 'status');
             onValue(statusRef, (snapshot) => {
-                const count = snapshot.numChildren();
-                onlineCountEl.textContent = count;
+                onlineCountEl.textContent = snapshot.numChildren();
             });
         }
 
@@ -304,21 +300,31 @@
             matchmakingBtn.disabled = true;
             statusEl.textContent = "Searching for an opponent...";
 
-            const code = matchCodeInput.value.trim();
+            const code = matchCodeInput.value.trim() || 'default'; // Use a default code if none provided
+            const desiredBoardSize = localState.boardSize;
             const waitingPoolRef = collection(db, `artifacts/${appId}/public/data/waiting_pool`);
-            const q = query(waitingPoolRef, where('code', '==', code), limit(1));
+            
+            // Query for an opponent with the same code and board size
+            const q = query(waitingPoolRef, where('code', '==', code), where('boardSize', '==', desiredBoardSize), limit(1));
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
                 // No one is waiting, so we wait
+                statusEl.textContent = "Waiting for an opponent...";
                 const myWaitingRef = doc(db, `artifacts/${appId}/public/data/waiting_pool`, auth.currentUser.uid);
-                await setDoc(myWaitingRef, { waitingSince: new Date(), boardSize: localState.boardSize, code });
+                await setDoc(myWaitingRef, { 
+                    waitingSince: new Date(), 
+                    boardSize: desiredBoardSize, 
+                    code: code 
+                });
 
                 // Listen for our waiting doc to be deleted, which means we've been matched
                 unsubscribeWaiting = onSnapshot(myWaitingRef, (doc) => {
                     if (!doc.exists()) {
-                        statusEl.textContent = "Opponent found! Starting game...";
                         if(unsubscribeWaiting) unsubscribeWaiting();
+                        // We don't start the game from here. The matcher starts it.
+                        // We just need to listen for a new game invite.
+                        listenForGameInvite();
                     }
                 });
 
@@ -326,47 +332,71 @@
                 // Found a waiting player, let's start a game
                 const opponentDoc = querySnapshot.docs[0];
                 const opponentId = opponentDoc.id;
-                const opponentData = opponentDoc.data();
 
                 // Delete opponent from waiting pool
                 await deleteDoc(opponentDoc.ref);
 
-                const newGameId = `game_${auth.currentUser.uid}_${opponentId}`;
-                const players = [auth.currentUser.uid, opponentId];
-                const boardSize = opponentData.boardSize || 9;
+                // Create a new game
+                const newGameId = `game_${Math.random().toString(36).substr(2, 9)}`;
+                const players = Math.random() < 0.5 ? [auth.currentUser.uid, opponentId] : [opponentId, auth.currentUser.uid]; // Randomize who goes first
 
                 const newGameData = {
                     players,
-                    boardSize,
-                    boardData: Array(boardSize * boardSize).fill(null),
+                    boardSize: desiredBoardSize,
+                    boardData: Array(desiredBoardSize * desiredBoardSize).fill(null),
                     p1Score: 0,
                     p2Score: 0,
                     currentPlayerId: players[0],
                     passCount: 0,
                     previousStates: [],
-                    createdAt: new Date()
+                    createdAt: new Date(),
+                    gameId: newGameId
                 };
 
                 await setDoc(doc(db, `artifacts/${appId}/public/data/games`, newGameId), newGameData);
-                joinGame(newGameId);
+                // Both players will now get this game via their listeners
             }
+            listenForGameInvite();
         }
         
-        function joinGame(gameId) {
-            currentGameId = gameId;
-            if (unsubscribeGame) unsubscribeGame();
+        function listenForGameInvite() {
+            if (unsubscribeGame) unsubscribeGame(); // Stop listening to old games
+            
+            const gamesRef = collection(db, `artifacts/${appId}/public/data/games`);
+            const q = query(gamesRef, where('players', 'array-contains', auth.currentUser.uid));
 
-            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameId);
-            unsubscribeGame = onSnapshot(gameRef, (doc) => {
-                if (doc.exists()) {
-                    const gameData = doc.data();
-                    updateLocalState(gameData);
-                    renderGame();
-                } else {
-                    // Game was deleted (e.g., opponent left)
-                    endGame("Opponent left the game.");
+            unsubscribeGame = onSnapshot(q, (snapshot) => {
+                if (!snapshot.empty) {
+                    // Assuming we join the newest game found
+                    const gameDoc = snapshot.docs.sort((a,b) => b.data().createdAt.toMillis() - a.data().createdAt.toMillis())[0];
+                    if (gameDoc.id !== currentGameId) {
+                        joinGame(gameDoc.id);
+                    } else {
+                        // It's just an update to the current game
+                         if (gameDoc.exists()) {
+                            updateLocalState(gameDoc.data());
+                            renderGame();
+                        }
+                    }
                 }
             });
+        }
+
+        function joinGame(gameId) {
+            if (unsubscribeWaiting) unsubscribeWaiting();
+            currentGameId = gameId;
+            statusEl.textContent = "Opponent found! Starting game...";
+            
+            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameId);
+            // The main listener in listenForGameInvite will handle updates
+            onSnapshot(gameRef, (doc) => {
+                 if (doc.exists()) {
+                    updateLocalState(doc.data());
+                    renderGame();
+                } else {
+                    endGame("Opponent left the game.");
+                }
+            })
         }
 
         function updateLocalState(gameData) {
@@ -382,13 +412,15 @@
             p2ScoreEl.textContent = localState.p2Score;
 
             const myTurn = localState.currentPlayerId === auth.currentUser.uid;
-            const amPlayer1 = localState.players[0] === auth.currentUser.uid;
-            const myRole = amPlayer1 ? 'Player 1' : 'Player 2';
+            const amIPlayer1 = localState.players[0] === auth.currentUser.uid;
+            const myRole = amIPlayer1 ? 'Player 1 (Black)' : 'Player 2 (White)';
 
-            statusEl.textContent = myTurn ? `Your turn (${myRole})` : `Opponent's turn...`;
+            statusEl.textContent = myTurn ? `Your turn, ${myRole}` : `Opponent's turn...`;
             boardEl.classList.add('active');
             passBtn.disabled = !myTurn;
-            matchmakingBtn.disabled = true;
+            matchmakingBtn.textContent = 'Leave Game';
+            matchmakingBtn.disabled = false;
+            matchmakingBtn.onclick = leaveGame; // Change button function
             sizeSlider.disabled = true;
         }
 
@@ -396,7 +428,7 @@
             boardEl.innerHTML = '';
             boardEl.style.gridTemplateColumns = `repeat(${localState.boardSize}, 1fr)`;
             boardEl.style.gridTemplateRows = `repeat(${localState.boardSize}, 1fr)`;
-            const boardPixelWidth = Math.min(window.innerWidth, window.innerHeight) * 0.6;
+            const boardPixelWidth = Math.min(window.innerWidth, window.innerHeight) * 0.7;
             boardEl.style.width = `${boardPixelWidth}px`;
             boardEl.style.height = `${boardPixelWidth}px`;
             for (let i = 0; i < localState.boardSize * localState.boardSize; i++) {
@@ -410,7 +442,11 @@
 
         function renderBoard() {
             Array.from(boardEl.children).forEach((cell, i) => {
-                if (cell.firstChild) cell.removeChild(cell.firstChild);
+                // Clear previous stone
+                while (cell.firstChild) {
+                    cell.removeChild(cell.firstChild);
+                }
+                // Add new stone if it exists in state
                 if (localState.boardData[i]) {
                     const stone = document.createElement('div');
                     const playerClass = localState.boardData[i]; // 'black' or 'white'
@@ -428,53 +464,58 @@
             if (localState.boardData[index]) return; // Cell is not empty
 
             const playerColor = localState.players.indexOf(auth.currentUser.uid) === 0 ? 'black' : 'white';
-            let newState = { ...localState };
-            let tempBoard = [...newState.boardData];
+            
+            // Create a temporary board to test the move
+            let tempBoard = [...localState.boardData];
             tempBoard[index] = playerColor;
             
-            // --- Game Rule Logic (applied to temp state) ---
             const opponentColor = playerColor === 'black' ? 'white' : 'black';
             let capturedStones = 0;
             
-            // Check opponent captures
-            getNeighbors(index, newState.boardSize).forEach(n => {
+            // 1. Check for captures of opponent stones
+            getNeighbors(index, localState.boardSize).forEach(n => {
                 if (tempBoard[n] === opponentColor) {
-                    const group = getGroup(n, tempBoard, newState.boardSize);
-                    if (hasNoLiberties(group, tempBoard, newState.boardSize)) {
+                    const group = getGroup(n, tempBoard, localState.boardSize);
+                    if (hasNoLiberties(group, tempBoard, localState.boardSize)) {
                         capturedStones += group.length;
-                        group.forEach(i => tempBoard[i] = null);
+                        group.forEach(i => tempBoard[i] = null); // Remove captured stones
                     }
                 }
             });
 
-            // Check for suicide
-            const ownGroup = getGroup(index, tempBoard, newState.boardSize);
-            if (hasNoLiberties(ownGroup, tempBoard, newState.boardSize)) {
-                alert("Suicide moves are not allowed.");
+            // 2. Check for suicide
+            const ownGroup = getGroup(index, tempBoard, localState.boardSize);
+            if (hasNoLiberties(ownGroup, tempBoard, localState.boardSize)) {
+                // Using a custom modal/alert would be better than window.alert
+                statusEl.textContent = "Suicide moves are not allowed.";
+                setTimeout(() => { renderGame() }, 2000); // Reset status message
                 return;
             }
 
-            // Check for Ko rule
+            // 3. Check for Ko rule (preventing repeating board state)
             const stateString = tempBoard.join('');
-            if (newState.previousStates.includes(stateString)) {
-                alert("Move is not allowed due to the Ko rule.");
+            if (localState.previousStates.includes(stateString)) {
+                statusEl.textContent = "Move is not allowed due to the Ko rule.";
+                setTimeout(() => { renderGame() }, 2000); // Reset status message
                 return;
             }
 
-            // --- Update Firestore ---
+            // --- If move is valid, update Firestore ---
             const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
             const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
             
-            if (playerColor === 'black') newState.p1Score += capturedStones;
-            else newState.p2Score += capturedStones;
+            let newP1Score = localState.p1Score;
+            let newP2Score = localState.p2Score;
+            if (playerColor === 'black') newP1Score += capturedStones;
+            else newP2Score += capturedStones;
 
             await updateDoc(gameRef, {
                 boardData: tempBoard,
                 currentPlayerId: nextPlayerId,
-                passCount: 0,
-                p1Score: newState.p1Score,
-                p2Score: newState.p2Score,
-                previousStates: [...newState.previousStates, stateString]
+                passCount: 0, // Reset pass count on a valid move
+                p1Score: newP1Score,
+                p2Score: newP2Score,
+                previousStates: [...localState.previousStates.slice(-10), stateString] // Keep last 10 states
             });
         }
 
@@ -483,7 +524,11 @@
             
             const newPassCount = localState.passCount + 1;
             if (newPassCount >= 2) {
-                endGame("Game over. Both players passed.");
+                // Game ends, but we'll just announce it. The document won't be deleted.
+                const winner = localState.p1Score > localState.p2Score ? "Player 1 Wins!" : "Player 2 Wins!";
+                statusEl.textContent = `Game Over. ${winner}`;
+                if (unsubscribeGame) unsubscribeGame();
+                passBtn.disabled = true;
             } else {
                 const nextPlayerId = localState.players.find(p => p !== auth.currentUser.uid);
                 const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
@@ -493,21 +538,37 @@
                 });
             }
         }
+        
+        async function leaveGame() {
+             if (currentGameId) {
+                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
+                await deleteDoc(gameRef); // This will notify the other player
+            }
+            resetToLobby();
+        }
 
         function endGame(message) {
-            alert(message);
+            statusEl.textContent = message;
+            resetToLobby();
+        }
+        
+        function resetToLobby() {
             if (unsubscribeGame) unsubscribeGame();
-            if (currentGameId) {
-                const gameRef = doc(db, `artifacts/${appId}/public/data/games`, currentGameId);
-                // Optional: could delete game doc after a delay
-                // deleteDoc(gameRef);
-            }
+            unsubscribeGame = null;
             currentGameId = null;
+            
             boardEl.classList.remove('active');
             passBtn.disabled = true;
+            matchmakingBtn.textContent = 'Find Match';
             matchmakingBtn.disabled = false;
+            matchmakingBtn.onclick = findMatch;
             sizeSlider.disabled = false;
             statusEl.textContent = "Ready to play.";
+            
+            // Re-initialize board to default size
+            localState.boardSize = parseInt(sizeSlider.value);
+            createBoard();
+            renderBoard(); // Render the empty board
         }
 
         // --- Helper Functions (no changes needed) ---
