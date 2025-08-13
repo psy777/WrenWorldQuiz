@@ -148,6 +148,7 @@
             <input type="range" id="size-slider" min="5" max="25" value="9">
             <span id="size-label" class="ml-4 w-16 text-center">9x9</span>
         </div>
+        <input id="match-code" type="text" placeholder="Match code (optional)" class="mt-2 p-2 rounded bg-[var(--cell-bg)] text-center" />
     </div>
     <div id="online-count-container">Players Online: <span id="online-count">0</span></div>
     <div id="game-status">Ready to play.</div>
@@ -187,7 +188,7 @@
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getDatabase, ref, onValue, set, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         // DOM Elements
@@ -200,14 +201,14 @@
         const sizeLabel = document.getElementById('size-label');
         const statusEl = document.getElementById('game-status');
         const onlineCountEl = document.getElementById('online-count');
+        const matchCodeInput = document.getElementById('match-code');
 
         // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'qirra-default';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const rtdb = getDatabase(app); // Realtime Database for presence
-        const auth = getAuth(app);
+        let app, db, rtdb, auth;
+
+        matchmakingBtn.disabled = true;
 
         // --- Game State ---
         let localState = {
@@ -227,6 +228,14 @@
         // --- Core Game Logic ---
         async function initializeAppLogic() {
             try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    throw new Error('Missing Firebase configuration');
+                }
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                rtdb = getDatabase(app);
+                auth = getAuth(app);
+
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -236,8 +245,8 @@
                 setupPresence(); // Set up online status
                 matchmakingBtn.disabled = false;
             } catch (error) {
-                console.error("Authentication failed:", error);
-                statusEl.textContent = "Error: Could not connect.";
+                console.error("Firebase initialization failed:", error);
+                statusEl.textContent = "Offline mode: no matchmaking.";
             }
             setupUI();
         }
@@ -271,19 +280,24 @@
         }
 
         async function findMatch() {
+            if (!auth || !db) {
+                statusEl.textContent = "Matchmaking unavailable.";
+                return;
+            }
             if (unsubscribeWaiting) unsubscribeWaiting();
             matchmakingBtn.disabled = true;
             statusEl.textContent = "Searching for an opponent...";
-            
+
+            const code = matchCodeInput.value.trim();
             const waitingPoolRef = collection(db, `artifacts/${appId}/public/data/waiting_pool`);
-            const q = query(waitingPoolRef, limit(1));
+            const q = query(waitingPoolRef, where('code', '==', code), limit(1));
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
                 // No one is waiting, so we wait
                 const myWaitingRef = doc(db, `artifacts/${appId}/public/data/waiting_pool`, auth.currentUser.uid);
-                await setDoc(myWaitingRef, { waitingSince: new Date(), boardSize: localState.boardSize });
-                
+                await setDoc(myWaitingRef, { waitingSince: new Date(), boardSize: localState.boardSize, code });
+
                 // Listen for our waiting doc to be deleted, which means we've been matched
                 unsubscribeWaiting = onSnapshot(myWaitingRef, (doc) => {
                     if (!doc.exists()) {
