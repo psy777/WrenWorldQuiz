@@ -52,13 +52,17 @@ const firebaseConfig = {
 
 ## Step 4: Configure the Game
 
-1. Open `index.html` in a text editor
-2. Find the Firebase configuration section (around line 150):
+The game supports multiple ways to configure Firebase credentials for security:
+
+### Option A: External Configuration File (Recommended for Development)
+
+1. Copy your Firebase configuration values
+2. Open `firebase-config.js` in a text editor
+3. Replace the placeholder values with your actual Firebase configuration:
 
 ```javascript
-// Firebase configuration - Replace with your actual Firebase project config
 const firebaseConfig = {
-    apiKey: "your-api-key-here",
+    apiKey: "AIzaSyC...", // Your actual API key
     authDomain: "your-project.firebaseapp.com",
     databaseURL: "https://your-project-default-rtdb.firebaseio.com",
     projectId: "your-project-id",
@@ -68,7 +72,39 @@ const firebaseConfig = {
 };
 ```
 
-3. Replace the placeholder values with your actual Firebase configuration values
+4. **Important**: Add `firebase-config.js` to your `.gitignore` file to prevent committing credentials to version control
+
+### Option B: Environment Variables (Recommended for Production)
+
+1. Copy `.env.example` to `.env`
+2. Fill in your actual Firebase values in the `.env` file:
+
+```bash
+FIREBASE_API_KEY=AIzaSyC...
+FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=123456789
+FIREBASE_APP_ID=1:123456789:web:abcdef123456
+```
+
+3. Use a build tool like Vite, Webpack, or Parcel to inject environment variables
+
+### Option C: Runtime Injection (For Dynamic Configuration)
+
+Set the configuration at runtime by defining a global variable before the game loads:
+
+```html
+<script>
+window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyC...",
+    authDomain: "your-project.firebaseapp.com",
+    // ... other config values
+};
+</script>
+<script type="module" src="index.html"></script>
+```
 
 ## Step 5: Test the Setup
 

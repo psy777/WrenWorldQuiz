@@ -188,6 +188,7 @@
     <script type="module">
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getDatabase, ref, onValue, set, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
@@ -208,18 +209,66 @@
         // --- Firebase Setup ---
         const appId = 'qirra-default';
         
-        // Firebase configuration - Replace with your actual Firebase project config
-        const firebaseConfig = {
-            apiKey: "your-api-key-here",
-            authDomain: "your-project.firebaseapp.com",
-            databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-            projectId: "your-project-id",
-            storageBucket: "your-project.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef123456"
-        };
+        // Firebase configuration - Load from external sources
+        let firebaseConfig = {};
+        
+        // Try to load configuration from multiple sources
+        async function loadFirebaseConfig() {
+            try {
+                // Method 1: Try to import from external config file
+                try {
+                    const configModule = await import('./firebase-config.js');
+                    firebaseConfig = configModule.firebaseConfig;
+                    console.log('Loaded Firebase config from external file');
+                } catch (importError) {
+                    console.log('External config file not found, trying other methods...');
+                }
+                
+                // Method 2: Check for environment variables (if available)
+                if (typeof process !== 'undefined' && process.env) {
+                    const envConfig = {
+                        apiKey: process.env.FIREBASE_API_KEY,
+                        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+                        databaseURL: process.env.FIREBASE_DATABASE_URL,
+                        projectId: process.env.FIREBASE_PROJECT_ID,
+                        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+                        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+                        appId: process.env.FIREBASE_APP_ID
+                    };
+                    
+                    // Only use env config if all required fields are present
+                    if (envConfig.apiKey && envConfig.projectId) {
+                        firebaseConfig = envConfig;
+                        console.log('Loaded Firebase config from environment variables');
+                    }
+                }
+                
+                // Method 3: Check for global window variables (for runtime injection)
+                if (typeof window !== 'undefined' && window.FIREBASE_CONFIG) {
+                    firebaseConfig = window.FIREBASE_CONFIG;
+                    console.log('Loaded Firebase config from window.FIREBASE_CONFIG');
+                }
+                
+                // Method 4: Fallback to inline configuration (development only)
+                if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "your-api-key-here") {
+                    firebaseConfig = {
+                        apiKey: "your-api-key-here",
+                        authDomain: "your-project.firebaseapp.com",
+                        databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+                        projectId: "your-project-id",
+                        storageBucket: "your-project.appspot.com",
+                        messagingSenderId: "123456789",
+                        appId: "1:123456789:web:abcdef123456"
+                    };
+                    console.log('Using fallback Firebase config (development mode)');
+                }
+                
+            } catch (error) {
+                console.error('Error loading Firebase configuration:', error);
+            }
+        }
 
-        let app, db, rtdb, auth;
+        let app, db, rtdb, auth, analytics;
         matchmakingBtn.disabled = true;
 
         // --- Game State ---
@@ -241,6 +290,9 @@
 
         // --- Core Game Logic ---
         async function initializeAppLogic() {
+            // Load Firebase configuration from external sources
+            await loadFirebaseConfig();
+            
             try {
                 // Check if Firebase config has real values (not placeholder)
                 if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "your-api-key-here") {
@@ -251,6 +303,14 @@
                 db = getFirestore(app);
                 rtdb = getDatabase(app);
                 auth = getAuth(app);
+                
+                // Initialize Analytics (optional - only if supported)
+                try {
+                    analytics = getAnalytics(app);
+                    console.log("Firebase Analytics initialized");
+                } catch (analyticsError) {
+                    console.log("Analytics not available:", analyticsError.message);
+                }
 
                 await signInAnonymously(auth);
                 console.log("Authenticated with UID:", auth.currentUser.uid);
