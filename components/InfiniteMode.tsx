@@ -69,6 +69,15 @@ type Hint = {
 
 type ResumeReq = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[]; frameId: string };
 
+// Keep in sync with DAILY_TIER in lib/dictionary.ts — the daily is played at a
+// fixed tier so the frame and its answers are identical for everyone.
+const DAILY_TIER = "10k";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function prettyDate(date: string): string {
+  const [, m, d] = date.split("-").map(Number);
+  return `${MONTHS[(m || 1) - 1]} ${d}`;
+}
+
 export default function InfiniteMode({
   showHelp,
   onCloseHelp,
@@ -81,6 +90,7 @@ export default function InfiniteMode({
   onResumeConsumed,
   onScore,
   onPoints,
+  daily,
 }: {
   showHelp: boolean;
   onCloseHelp: () => void;
@@ -93,11 +103,13 @@ export default function InfiniteMode({
   onResumeConsumed: () => void;
   onScore: (total: number) => void;
   onPoints: (points: number) => void;
+  daily: { date: string } | null;
 }) {
   const [frame, setFrame] = useState<Frame | null>(null);
   const [typed, setTyped] = useState<string[]>([]);
   const [finds, setFinds] = useState<Find[]>([]);
-  const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ id: number; text: string; ok?: boolean } | null>(null);
+  const [dailyNo, setDailyNo] = useState<number | null>(null);
   const [hint, setHint] = useState<Hint | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [statsClosed, setStatsClosed] = useState(false);
@@ -114,6 +126,8 @@ export default function InfiniteMode({
 
   const midLen = frame ? frame.len - 2 : 0;
 
+  const activeTier = daily ? DAILY_TIER : tier;
+
   const loadFrame = useCallback(async () => {
     setNotice(null);
     setHint(null);
@@ -121,6 +135,18 @@ export default function InfiniteMode({
     setTyped([]);
     setFinds([]);
     frameStart.current = Date.now();
+    if (daily) {
+      const fid = `daily-${daily.date}`;
+      frameId.current = fid;
+      const { data } = await jpost<Frame & { finds?: Find[]; number: number }>("/api/frame/daily", {
+        date: daily.date,
+        found: frameWords(fid),
+      });
+      setDailyNo(data.number);
+      setFrame({ start: data.start, end: data.end, len: data.len, total: data.total, best: data.best, bonuses: data.bonuses ?? [] });
+      setFinds(data.finds ?? []);
+      return;
+    }
     const r = resumeRef.current;
     if (r) {
       resumeRef.current = null; // consume, so a later New frame loads a random one
@@ -141,7 +167,7 @@ export default function InfiniteMode({
     frameId.current = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const { data } = await jget<Frame>(`/api/frame?tier=${tier}&multipliers=${multipliers ? "on" : "off"}`);
     setFrame({ ...data, bonuses: data.bonuses ?? [] });
-  }, [tier, multipliers, onResumeConsumed]);
+  }, [tier, multipliers, onResumeConsumed, daily]);
 
   useEffect(() => {
     loadFrame();
@@ -163,7 +189,7 @@ export default function InfiniteMode({
       len: frame.len,
       word,
       bonuses: frame.bonuses,
-      tier,
+      tier: activeTier,
     });
     if (!data.ok) {
       setNotice({ id: (seq.current += 1), text: data.reason });
@@ -197,7 +223,7 @@ export default function InfiniteMode({
     });
     const { totalScore } = saveFound(word, data.score, timeBonus);
     onScore(totalScore);
-  }, [frame, typed, midLen, finds, tier, onScore, onPoints]);
+  }, [frame, typed, midLen, finds, activeTier, onScore, onPoints]);
 
   const getHint = useCallback(async () => {
     if (!frame) return;
@@ -209,7 +235,7 @@ export default function InfiniteMode({
       len: frame.len,
       bonuses: frame.bonuses,
       found: finds.map((f) => f.word),
-      tier,
+      tier: activeTier,
       style: hintStyle,
     });
     if (data.ok && (data.synonym || data.definition)) {
@@ -227,9 +253,32 @@ export default function InfiniteMode({
       setNotice({ id: (seq.current += 1), text: data.reason ?? "No hint available." });
     }
     setHintLoading(false);
-  }, [frame, finds, tier, hintStyle]);
+  }, [frame, finds, activeTier, hintStyle]);
 
   const pickDef = useCallback((word: string) => setDefWord({ word }), []);
+
+  const share = useCallback(async () => {
+    if (!daily) return;
+    const url = `${location.origin}/wordgap?d=${daily.date}`;
+    const inTier = finds.filter((f) => !f.bonus).length;
+    const top = finds.some((f) => f.rank === 1);
+    const head = `wordgap · Daily${dailyNo ? ` #${dailyNo}` : ""}`;
+    const line = `${inTier}/${frame?.total ?? 0} words${top ? " · found the top word 🏆" : ""}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "wordgap daily", text: `${head}\n${line}`, url });
+        return;
+      }
+    } catch {
+      /* user dismissed the share sheet — fall through to copy */
+    }
+    try {
+      await navigator.clipboard.writeText(`${head} — ${line}\n${url}`);
+      setNotice({ id: (seq.current += 1), text: "Link copied to clipboard.", ok: true });
+    } catch {
+      setNotice({ id: (seq.current += 1), text: url, ok: true });
+    }
+  }, [daily, dailyNo, finds, frame]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -295,6 +344,11 @@ export default function InfiniteMode({
 
   return (
     <div className="infinite">
+      {daily && (
+        <div className="daily-banner">
+          Daily{dailyNo ? ` #${dailyNo}` : ""} <span className="db-dot">·</span> {prettyDate(daily.date)}
+        </div>
+      )}
       <div className="playarea">
         <div className="tiles">
           {Array.from({ length: frame.len }).map((_, i) => {
@@ -348,8 +402,8 @@ export default function InfiniteMode({
       </div>
 
       {notice && (
-        <div className="toast" key={notice.id} role="alert">
-          <span className="ico-mask ico-warn" />
+        <div className={`toast ${notice.ok ? "ok" : ""}`} key={notice.id} role="alert">
+          {!notice.ok && <span className="ico-mask ico-warn" />}
           {notice.text}
         </div>
       )}
@@ -363,10 +417,17 @@ export default function InfiniteMode({
           <span className="ico-mask ico-gear" />
           <span className="toollabel">Settings</span>
         </button>
-        <button className="toolbtn" onClick={loadFrame} title="New frame">
-          <span className="ico-mask ico-refresh" />
-          <span className="toollabel">New frame</span>
-        </button>
+        {daily ? (
+          <button className="toolbtn" onClick={share} title="Share this daily">
+            <span className="ico-mask ico-share" />
+            <span className="toollabel">Share</span>
+          </button>
+        ) : (
+          <button className="toolbtn" onClick={loadFrame} title="New frame">
+            <span className="ico-mask ico-refresh" />
+            <span className="toollabel">New frame</span>
+          </button>
+        )}
         <button className="toolbtn" onClick={getHint} title="Hint">
           <span className="ico-mask ico-hint" />
           <span className="toollabel">Hint</span>
@@ -501,9 +562,15 @@ export default function InfiniteMode({
                   Continue
                 </button>
               )}
-              <button className="btn primary" onClick={loadFrame}>
-                Next frame →
-              </button>
+              {daily ? (
+                <button className="btn primary" onClick={share}>
+                  Share result
+                </button>
+              ) : (
+                <button className="btn primary" onClick={loadFrame}>
+                  Next frame →
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -519,7 +586,7 @@ export default function InfiniteMode({
               Bonus words <span className="bonuscount">· {bonusFinds.length}</span>
             </div>
             <p className="muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
-              Words that fit but sit outside your {tier} dictionary. Tap one for its definition.
+              Words that fit but sit outside the {activeTier} dictionary. Tap one for its definition.
             </p>
             <div className="bonuslist">
               {bonusFinds

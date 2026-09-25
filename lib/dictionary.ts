@@ -94,16 +94,19 @@ export function dict(): Index {
 
 const inTier = (e: Entry, size: number) => size === Infinity || e.rank < size;
 
+type Rng = () => number;
+
 // Sprinkle double / triple-letter squares onto the fillable (middle) tiles.
-function randomBonuses(len: number): Bonus[] {
+// Pass a seeded `rng` for a reproducible layout (the daily); defaults to random.
+function randomBonuses(len: number, rng: Rng = Math.random): Bonus[] {
   const mid: number[] = [];
   for (let i = 1; i < len - 1; i++) mid.push(i);
-  const count = Math.min(mid.length, [0, 1, 1, 2][Math.floor(Math.random() * 4)]);
+  const count = Math.min(mid.length, [0, 1, 1, 2][Math.floor(rng() * 4)]);
   const bonuses: Bonus[] = [];
   const pool = [...mid];
   for (let n = 0; n < count && pool.length; n++) {
-    const idx = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-    bonuses.push({ index: idx, mult: Math.random() < 0.6 ? 2 : 3 });
+    const idx = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+    bonuses.push({ index: idx, mult: rng() < 0.6 ? 2 : 3 });
   }
   return bonuses.sort((a, b) => a.index - b.index);
 }
@@ -114,15 +117,15 @@ function bestWithBonuses(entries: Entry[], bonuses: Bonus[]): number {
   return entries.reduce((max, e) => Math.max(max, scoreWithBonuses(e.word, bonuses)), 0);
 }
 
-export function randomFrame(tier: string = "10k", multipliers: boolean = true) {
+export function randomFrame(tier: string = "10k", multipliers: boolean = true, rng: Rng = Math.random) {
   const d = dict();
   const size = tierSize(tier);
   const keys = d.frameKeysByTier[tier as TierLabel] ?? d.frameKeysByTier["450k"];
-  const key = keys[Math.floor(Math.random() * keys.length)];
+  const key = keys[Math.floor(rng() * keys.length)];
   const len = Number(key.slice(2));
   const arr = d.byFrame.get(key)!;
   const entries = size === Infinity ? arr : arr.filter((e) => inTier(e, size));
-  const bonuses = multipliers ? randomBonuses(len) : [];
+  const bonuses = multipliers ? randomBonuses(len, rng) : [];
   return {
     start: key[0].toUpperCase(),
     end: key[1].toUpperCase(),
@@ -131,6 +134,42 @@ export function randomFrame(tier: string = "10k", multipliers: boolean = true) {
     best: bestWithBonuses(entries, bonuses),
     bonuses,
   };
+}
+
+// ── Daily puzzle ──────────────────────────────────────────────────────────
+// Everyone gets the same frame on a given date: pick it with a PRNG seeded from
+// the date, at a fixed tier so the puzzle (and its answers) match for all players.
+export const DAILY_TIER: TierLabel = "10k";
+const DAILY_EPOCH = Date.UTC(2026, 0, 1); // "Daily #1" is 2026-01-01
+
+function mulberry32(seed: number): Rng {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+// Sequential puzzle number for a YYYY-MM-DD date (for the "Daily #N" label).
+export function dailyNumber(date: string): number {
+  const [y, m, d] = date.split("-").map(Number);
+  const t = Date.UTC(y, (m || 1) - 1, d || 1);
+  return Math.floor((t - DAILY_EPOCH) / 86_400_000) + 1;
+}
+
+// The deterministic frame for a given date, plus its puzzle number.
+export function dailyFrame(date: string) {
+  const rng = mulberry32(hashStr(`wordgap-daily:${date}`));
+  const frame = randomFrame(DAILY_TIER, true, rng);
+  return { ...frame, number: dailyNumber(date) };
 }
 
 // Where a (bonus-adjusted) score ranks among a frame's in-tier words.

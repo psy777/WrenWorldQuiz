@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import InfiniteMode from "@/components/InfiniteMode";
 import Dictionary from "@/components/Dictionary";
 import FrameHistory from "@/components/FrameHistory";
 import { getTotalScore, resetProgress } from "@/lib/local-store";
 
-type Tab = "infinite" | "history" | "dictionary";
+type Tab = "play" | "history" | "dictionary";
+type Mode = "daily" | "infinite";
 type ResumeReq = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[]; frameId: string };
 const TIERS = ["1k", "5k", "10k", "20k", "100k", "450k"] as const;
 
@@ -18,9 +19,18 @@ function fmtPoints(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
+// Local calendar date as YYYY-MM-DD — the day everyone shares.
+function todayKey(): string {
+  const n = new Date();
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`;
+}
+
 export default function Home() {
   const [score, setScore] = useState(0);
-  const [tab, setTab] = useState<Tab>("infinite");
+  const [tab, setTab] = useState<Tab>("play");
+  const [mode, setMode] = useState<Mode>("daily");
+  const [dailyDate, setDailyDate] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [light, setLight] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,7 +58,15 @@ export default function Home() {
     if (t && (TIERS as readonly string[]).includes(t)) setTier(t);
     setMultipliers(localStorage.getItem("wg_mult") !== "off"); // multipliers on by default
     if (localStorage.getItem("wg_hint") === "definition") setHintStyle("definition");
+    // A shared link (?d=YYYY-MM-DD) opens that exact daily; otherwise today's.
+    const shared = new URLSearchParams(window.location.search).get("d");
+    setDailyDate(shared && /^\d{4}-\d{2}-\d{2}$/.test(shared) ? shared : todayKey());
   }, []);
+
+  const dailyProp = useMemo(
+    () => (mode === "daily" && dailyDate ? { date: dailyDate } : null),
+    [mode, dailyDate],
+  );
 
   function toggleTheme() {
     setLight((l) => {
@@ -77,7 +95,7 @@ export default function Home() {
     resetProgress();
     setScore(0);
     setMenuOpen(false);
-    setTab("infinite");
+    setTab("play");
   }
 
   return (
@@ -87,7 +105,7 @@ export default function Home() {
           <Link href="/" className="hubback" title="All games">
             wren.gg /
           </Link>
-          <h1 onClick={() => setTab("infinite")} style={{ cursor: "pointer" }} title="Home">
+          <h1 onClick={() => setTab("play")} style={{ cursor: "pointer" }} title="Home">
             wordgap
           </h1>
           <button
@@ -159,34 +177,43 @@ export default function Home() {
         </div>
       </div>
 
-      {tab === "infinite" && settingsOpen && (
+      {tab === "play" && settingsOpen && (
         <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
           <div className="statscard settingscard" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" aria-label="Close" onClick={() => setSettingsOpen(false)}>
               ×
             </button>
             <div className="helphead">Game settings</div>
-            <div className="setrow">
-              <span className="setlabel">dictionary</span>
-              <div className="segmented">
-                {TIERS.map((t) => (
-                  <button key={t} className={tier === t ? "on" : ""} onClick={() => chooseTier(t)}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="setrow">
-              <span className="setlabel">multipliers</span>
-              <div className="segmented">
-                <button className={multipliers ? "on" : ""} onClick={() => chooseMultipliers(true)}>
-                  on
-                </button>
-                <button className={!multipliers ? "on" : ""} onClick={() => chooseMultipliers(false)}>
-                  off
-                </button>
-              </div>
-            </div>
+            {mode === "daily" ? (
+              <p className="muted" style={{ margin: "0 0 4px", fontSize: 13 }}>
+                The daily is fixed at the <b>10k</b> dictionary with multipliers so it&apos;s the same for everyone.
+                Switch to <b>Infinite</b> to change these.
+              </p>
+            ) : (
+              <>
+                <div className="setrow">
+                  <span className="setlabel">dictionary</span>
+                  <div className="segmented">
+                    {TIERS.map((t) => (
+                      <button key={t} className={tier === t ? "on" : ""} onClick={() => chooseTier(t)}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="setrow">
+                  <span className="setlabel">multipliers</span>
+                  <div className="segmented">
+                    <button className={multipliers ? "on" : ""} onClick={() => chooseMultipliers(true)}>
+                      on
+                    </button>
+                    <button className={!multipliers ? "on" : ""} onClick={() => chooseMultipliers(false)}>
+                      off
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
             <div className="setrow">
               <span className="setlabel">hint</span>
               <div className="segmented">
@@ -202,20 +229,37 @@ export default function Home() {
         </div>
       )}
 
-      {tab === "infinite" && (
-        <InfiniteMode
-          showHelp={showHelp}
-          onCloseHelp={() => setShowHelp(false)}
-          tier={tier}
-          multipliers={multipliers}
-          hintStyle={hintStyle}
-          settingsOpen={settingsOpen}
-          onToggleSettings={() => setSettingsOpen((o) => !o)}
-          resume={resume}
-          onResumeConsumed={clearResume}
-          onScore={(total) => setScore(total)}
-          onPoints={(pts) => setPointsPop({ id: (popId.current += 1), pts })}
-        />
+      {tab === "play" && (
+        <>
+          <div className="playmode">
+            <div className="segmented">
+              <button className={mode === "daily" ? "on" : ""} onClick={() => setMode("daily")}>
+                Daily
+              </button>
+              <button className={mode === "infinite" ? "on" : ""} onClick={() => setMode("infinite")}>
+                Infinite
+              </button>
+            </div>
+          </div>
+          {mode === "daily" && !dailyDate ? (
+            <p className="muted">Loading…</p>
+          ) : (
+            <InfiniteMode
+              showHelp={showHelp}
+              onCloseHelp={() => setShowHelp(false)}
+              tier={tier}
+              multipliers={multipliers}
+              hintStyle={hintStyle}
+              settingsOpen={settingsOpen}
+              onToggleSettings={() => setSettingsOpen((o) => !o)}
+              resume={resume}
+              onResumeConsumed={clearResume}
+              daily={dailyProp}
+              onScore={(total) => setScore(total)}
+              onPoints={(pts) => setPointsPop({ id: (popId.current += 1), pts })}
+            />
+          )}
+        </>
       )}
 
       {tab === "dictionary" && <Dictionary />}
@@ -225,7 +269,8 @@ export default function Home() {
           <FrameHistory
             onSelect={(r) => {
               setResume(r);
-              setTab("infinite");
+              setMode("infinite");
+              setTab("play");
             }}
           />
         </div>

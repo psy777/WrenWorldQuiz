@@ -41,17 +41,15 @@ export default function Hub() {
         </button>
       </header>
 
-      <section className="hub-hero">
-        <h1>breaktime games</h1>
-      </section>
-
-      <div className="hub-cards">
+      <ul className="hub-list">
         {GAMES.map((g) => (
-          <Link key={g.href} className="hub-card" href={g.href}>
-            <span className="hub-card-title">{g.title}</span>
-          </Link>
+          <li key={g.href}>
+            <Link className="hub-link" href={g.href}>
+              {g.title}
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
