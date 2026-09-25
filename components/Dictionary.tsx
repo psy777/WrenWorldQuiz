@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { jget } from "@/lib/api";
+import { listFound } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
 type Entry = { word: string; score: number; createdAt: number };
@@ -14,7 +14,7 @@ export default function Dictionary() {
   const [sort, setSort] = useState<Sort>("az");
 
   useEffect(() => {
-    jget<{ ok: boolean; words: Entry[] }>("/api/dictionary").then(({ data }) => setWords(data.words ?? []));
+    setWords(listFound());
   }, []);
 
   const shown = useMemo(() => {

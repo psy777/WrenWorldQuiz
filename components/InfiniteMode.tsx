@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { jget, jpost } from "@/lib/api";
 import { letterValue, type Bonus } from "@/lib/scoring";
+import { frameWords, recordFrame, saveFound } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
 // A ring of particles. `n`/`dist` control how many and how far they fly.
@@ -131,7 +132,7 @@ export default function InfiniteMode({
         len: r.len,
         bonuses: r.bonuses,
         tier,
-        frameId: r.frameId,
+        found: frameWords(r.frameId),
       });
       setFrame({ start: data.start, end: data.end, len: data.len, total: data.total, best: data.best, bonuses: data.bonuses ?? [] });
       setFinds(data.finds ?? []);
@@ -182,7 +183,7 @@ export default function InfiniteMode({
     onPoints(data.score + timeBonus); // "+N pts" floats up by the profile
     if (data.bonus) setBarBurst((seq.current += 1)); // celebrate a bonus word on the finds bar
     const inTierFound = newFinds.filter((f) => !f.bonus).length;
-    jpost("/api/history", {
+    recordFrame({
       frameId: frameId.current,
       startLetter: frame.start,
       endLetter: frame.end,
@@ -194,12 +195,8 @@ export default function InfiniteMode({
       topWord: newFinds.find((f) => f.rank === 1)?.word ?? null,
       words: newFinds.map((f) => f.word),
     });
-    const { data: saved } = await jpost<{ ok: boolean; totalScore?: number }>("/api/dictionary", {
-      word,
-      score: data.score,
-      timeBonus,
-    });
-    if (saved.ok && typeof saved.totalScore === "number") onScore(saved.totalScore);
+    const { totalScore } = saveFound(word, data.score, timeBonus);
+    onScore(totalScore);
   }, [frame, typed, midLen, finds, tier, onScore, onPoints]);
 
   const getHint = useCallback(async () => {
@@ -577,7 +574,7 @@ export default function InfiniteMode({
                 <b>Hint</b> gives a synonym, a rhyme and where the next-best word ranks. Tap any word for its definition.
               </li>
               <li>
-                <b>Find the top word</b> to bank the frame and unlock a new one. Signed in, every word adds points.
+                <b>Find the top word</b> to bank the frame and unlock a new one. Every word you find adds points.
               </li>
             </ul>
             <div className="helpkeys">

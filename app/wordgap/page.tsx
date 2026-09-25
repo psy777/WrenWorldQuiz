@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { jget, jpost, type User } from "@/lib/api";
 import InfiniteMode from "@/components/InfiniteMode";
 import Dictionary from "@/components/Dictionary";
 import FrameHistory from "@/components/FrameHistory";
-import AuthPanel from "@/components/AuthPanel";
+import { getTotalScore, resetProgress } from "@/lib/local-store";
 
-type Tab = "infinite" | "account" | "dictionary";
+type Tab = "infinite" | "history" | "dictionary";
 type ResumeReq = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[]; frameId: string };
 const TIERS = ["1k", "5k", "10k", "20k", "100k", "450k"] as const;
 
@@ -20,7 +19,7 @@ function fmtPoints(n: number): string {
 }
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
+  const [score, setScore] = useState(0);
   const [tab, setTab] = useState<Tab>("infinite");
   const [showHelp, setShowHelp] = useState(false);
   const [light, setLight] = useState(false);
@@ -41,7 +40,7 @@ export default function Home() {
   }, [pointsPop]);
 
   useEffect(() => {
-    jget<{ user: User | null }>("/api/auth/me").then(({ data }) => setUser(data.user));
+    setScore(getTotalScore());
     const stored = localStorage.getItem("wg_theme") === "light";
     setLight(stored);
     document.documentElement.setAttribute("data-theme", stored ? "light" : "dark");
@@ -73,9 +72,11 @@ export default function Home() {
     localStorage.setItem("wg_hint", v);
   }
 
-  async function logout() {
-    await jpost("/api/auth/logout");
-    setUser(null);
+  function clearProgress() {
+    if (!confirm("Erase all your words, points and frame history on this device?")) return;
+    resetProgress();
+    setScore(0);
+    setMenuOpen(false);
     setTab("infinite");
   }
 
@@ -103,67 +104,57 @@ export default function Home() {
         </div>
         <div className="topright">
           <div className="who">
-            {user ? (
-              <div className="menu">
-                <button
-                  className="menu-btn"
-                  onClick={() => setMenuOpen((o) => !o)}
-                  aria-haspopup="true"
-                  aria-expanded={menuOpen}
-                  title="Account"
-                >
-                  <span className="username">{user.name}</span>
-                  <span className="ico-mask ico-menu" />
-                </button>
-                {pointsPop && (
-                  <span className="pointspop" key={pointsPop.id} aria-hidden>
-                    +{pointsPop.pts}
-                  </span>
-                )}
-                {menuOpen && (
-                  <>
-                    <div className="menu-scrim" onClick={() => setMenuOpen(false)} />
-                    <div className="menu-pop">
-                      <div className="menu-head">
-                        <b>{user.name}</b>
-                        <span title={`${user.totalScore.toLocaleString()} points`}>{fmtPoints(user.totalScore)} pts</span>
-                      </div>
-                      <button
-                        className="menu-item"
-                        onClick={() => {
-                          setTab("dictionary");
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Dictionary
-                      </button>
-                      <button
-                        className="menu-item"
-                        onClick={() => {
-                          setTab("account");
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Account
-                      </button>
-                      <button
-                        className="menu-item"
-                        onClick={() => {
-                          logout();
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <button className="linkbtn" onClick={() => setTab("account")}>
-                sign in
+            <div className="menu">
+              <button
+                className="menu-btn"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+                title="Your progress"
+              >
+                <span className="username" title={`${score.toLocaleString()} points`}>
+                  {fmtPoints(score)} pts
+                </span>
+                <span className="ico-mask ico-menu" />
               </button>
-            )}
+              {pointsPop && (
+                <span className="pointspop" key={pointsPop.id} aria-hidden>
+                  +{pointsPop.pts}
+                </span>
+              )}
+              {menuOpen && (
+                <>
+                  <div className="menu-scrim" onClick={() => setMenuOpen(false)} />
+                  <div className="menu-pop">
+                    <div className="menu-head">
+                      <b>your progress</b>
+                      <span title={`${score.toLocaleString()} points`}>{fmtPoints(score)} pts</span>
+                    </div>
+                    <button
+                      className="menu-item"
+                      onClick={() => {
+                        setTab("dictionary");
+                        setMenuOpen(false);
+                      }}
+                    >
+                      Dictionary
+                    </button>
+                    <button
+                      className="menu-item"
+                      onClick={() => {
+                        setTab("history");
+                        setMenuOpen(false);
+                      }}
+                    >
+                      Frame history
+                    </button>
+                    <button className="menu-item" onClick={clearProgress}>
+                      Reset progress
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -222,42 +213,23 @@ export default function Home() {
           onToggleSettings={() => setSettingsOpen((o) => !o)}
           resume={resume}
           onResumeConsumed={clearResume}
-          onScore={(total) => setUser((u) => (u ? { ...u, totalScore: total } : u))}
-          onPoints={(pts) => {
-            if (user) setPointsPop({ id: (popId.current += 1), pts });
-          }}
+          onScore={(total) => setScore(total)}
+          onPoints={(pts) => setPointsPop({ id: (popId.current += 1), pts })}
         />
       )}
-      {tab === "dictionary" &&
-        (user ? <Dictionary /> : <p className="muted">Sign in to keep a dictionary of the words you find.</p>)}
-      {tab === "account" &&
-        (user ? (
-          <div className="stack">
-            <div className="between acct-head">
-              <p style={{ margin: 0 }}>
-                Signed in as <b>{user.name}</b>
-                {user.email ? ` (${user.email})` : ""} ·{" "}
-                <span title={`${user.totalScore.toLocaleString()} points`}>{fmtPoints(user.totalScore)} pts</span>
-              </p>
-              <button className="btn btn-sm" onClick={logout}>
-                Sign out
-              </button>
-            </div>
-            <FrameHistory
-              onSelect={(r) => {
-                setResume(r);
-                setTab("infinite");
-              }}
-            />
-          </div>
-        ) : (
-          <AuthPanel
-            onAuthed={(u) => {
-              setUser(u);
+
+      {tab === "dictionary" && <Dictionary />}
+
+      {tab === "history" && (
+        <div className="stack">
+          <FrameHistory
+            onSelect={(r) => {
+              setResume(r);
               setTab("infinite");
             }}
           />
-        ))}
+        </div>
+      )}
     </div>
   );
 }

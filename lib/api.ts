@@ -1,5 +1,3 @@
-export type User = { id: string; email: string | null; name: string; totalScore: number };
-
 export async function jget<T = unknown>(path: string): Promise<{ status: number; data: T }> {
   const r = await fetch(path);
   return { status: r.status, data: await r.json().catch(() => ({} as T)) };

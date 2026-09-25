@@ -1,26 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { jget } from "@/lib/api";
+import { listFrames, type FrameRecord } from "@/lib/local-store";
 
-type FrameRow = {
-  frameId: string;
-  startLetter: string;
-  endLetter: string;
-  len: number;
-  bonuses: string;
-  total: number;
-  found: number;
-  topFound: number;
-  topWord: string | null;
-};
 type ResumeReq = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[]; frameId: string };
 
 export default function FrameHistory({ onSelect }: { onSelect: (r: ResumeReq) => void }) {
-  const [frames, setFrames] = useState<FrameRow[] | null>(null);
+  const [frames, setFrames] = useState<FrameRecord[] | null>(null);
 
   useEffect(() => {
-    jget<{ ok: boolean; frames: FrameRow[] }>("/api/history").then(({ data }) => setFrames(data.frames ?? []));
+    setFrames(listFrames());
   }, []);
 
   if (!frames) return <p className="muted">Loading history…</p>;
@@ -32,12 +21,7 @@ export default function FrameHistory({ onSelect }: { onSelect: (r: ResumeReq) =>
         frame history · {frames.length}
       </div>
       {frames.map((r) => {
-        let bonuses: { index: number; mult: number }[] = [];
-        try {
-          bonuses = JSON.parse(r.bonuses);
-        } catch {
-          /* ignore */
-        }
+        const bonuses = r.bonuses ?? [];
         const mult = new Map(bonuses.map((b) => [b.index, b.mult]));
         const pct = r.total > 0 ? Math.round((r.found / r.total) * 100) : 0;
         const solved = !!(r.topFound && r.topWord);
