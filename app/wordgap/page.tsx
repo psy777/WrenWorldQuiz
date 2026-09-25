@@ -84,7 +84,7 @@ export default function Home() {
       <div className="brand">
         <div className="brandleft">
           <Link href="/" className="hubback" title="All games">
-            psy.fun /
+            wren.gg /
           </Link>
           <h1 onClick={() => setTab("infinite")} style={{ cursor: "pointer" }} title="Home">
             wordgap

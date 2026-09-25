@@ -43,7 +43,7 @@ export default function Hub() {
     <div className="wrap">
       <div className="brand">
         <div className="brandleft">
-          <h1>psy.fun</h1>
+          <h1>wren.gg</h1>
         </div>
         <div className="topright">
           <button className="icon" title="Toggle light / dark" aria-label="Toggle light / dark" onClick={toggleTheme}>

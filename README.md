@@ -1,4 +1,4 @@
-# psy.fun
+# wren.gg
 
 A little collection of games to play with — my take on [neal.fun](https://neal.fun).
 A single [Next.js](https://nextjs.org) app: a hub landing page that links out to

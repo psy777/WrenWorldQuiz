@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "psy.fun",
+  title: "wren.gg",
   description: "A little collection of games to play with.",
 };
 
@@ -11,7 +11,7 @@ const themeScript = `try{document.documentElement.setAttribute('data-theme',loca
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
