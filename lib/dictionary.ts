@@ -140,7 +140,7 @@ export function randomFrame(tier: string = "10k", multipliers: boolean = true, r
 // Everyone gets the same frame on a given date: pick it with a PRNG seeded from
 // the date, at a fixed tier so the puzzle (and its answers) match for all players.
 export const DAILY_TIER: TierLabel = "10k";
-const DAILY_EPOCH = Date.UTC(2026, 0, 1); // "Daily #1" is 2026-01-01
+const DAILY_EPOCH = Date.UTC(2026, 8, 25); // "Daily #1" is 2026-09-25 (launch day)
 
 function mulberry32(seed: number): Rng {
   let a = seed >>> 0;
