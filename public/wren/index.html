@@ -97,24 +97,28 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4 transition-colors duration-300">
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 transition-colors duration-300">
 
     <div id="main-container" class="w-full max-w-7xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-2xl border border-gray-200 transition-colors duration-300">
-        <header class="text-center mb-4 relative">
-            <h1 id="main-title" class="text-3xl sm:text-4xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
-            <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
-            <div class="absolute top-0 left-0 flex items-center gap-3">
-                <a href="/" title="All games on wren.gg" class="text-sm font-semibold text-gray-400 hover:text-indigo-600 transition whitespace-nowrap">wren.gg&nbsp;/</a>
-                <button id="back-to-quiz-btn" class="hidden bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
-                 <button id="profile-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition shadow-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-                    </svg>
-                    Profile
-                </button>
+        <header class="mb-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-baseline gap-3 min-w-0">
+                    <a href="/" title="All games on wren.gg" class="text-sm font-semibold text-gray-400 hover:text-indigo-600 transition whitespace-nowrap">wren.gg&nbsp;/</a>
+                    <h1 id="main-title" class="text-2xl sm:text-3xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button id="back-to-quiz-btn" class="hidden bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
+                    <button id="profile-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                        </svg>
+                        Profile
+                    </button>
+                    <div id="explored-counter" class="hidden bg-green-100 text-green-800 font-bold text-lg sm:text-xl px-4 py-2 rounded-lg shadow-md"></div>
+                    <div id="score-display" class="hidden bg-white bg-opacity-80 text-blue-900 font-bold text-lg sm:text-xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
+                </div>
             </div>
-            <div id="explored-counter" class="hidden my-2 md:my-0 md:absolute md:top-0 md:right-0 bg-green-100 text-green-800 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md"></div>
-            <div id="score-display" class="hidden absolute top-0 right-0 bg-white bg-opacity-80 text-blue-900 font-bold text-xl sm:text-2xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
+            <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
         </header>
 
         <div id="quiz-content" class="relative">
@@ -1037,12 +1041,12 @@
                 theme = newThemeName;
                 const themeData = themes[theme];
 
-                if (currentTileLayer) map.removeLayer(currentTileLayer);
-                currentTileLayer = L.tileLayer(themeData.url, {
-                    attribution: themeData.attribution,
-                    subdomains: 'abcd', maxZoom: 18, minZoom: 2,
-                }).addTo(map);
-                
+                // No raster basemap: the coloured country shapes are the map. This keeps
+                // the quiz key-free (no tile-provider "API key" notice) and flat, which
+                // sits better with the rest of wren.gg. The theme still sets the backdrop
+                // colour below and recolours the shapes.
+                if (currentTileLayer) { map.removeLayer(currentTileLayer); currentTileLayer = null; }
+
                 document.documentElement.style.setProperty('--map-bg-color', themeData.mapBg);
                 updateThemeClasses(themes[oldThemeName].classes, themeData.classes, isInitial);
 
