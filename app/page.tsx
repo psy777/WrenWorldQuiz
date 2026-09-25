@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Game = { href: string; title: string };
+type Game = { href: string; title: string; static?: boolean };
 
 const GAMES: Game[] = [
   { href: "/wordgap", title: "wordgap" },
-  { href: "/wren", title: "World Map Quiz" },
+  // The quiz is a standalone static app — full navigation, not client routing.
+  { href: "/wren", title: "World Map Quiz", static: true },
 ];
 
 export default function Hub() {
@@ -42,13 +43,21 @@ export default function Hub() {
       </header>
 
       <ul className="hub-list">
-        {GAMES.map((g) => (
-          <li key={g.href}>
-            <Link className="hub-link" href={g.href}>
-              {g.title}
-            </Link>
-          </li>
-        ))}
+        {GAMES.map((g) =>
+          g.static ? (
+            <li key={g.href}>
+              <a className="hub-link" href={g.href}>
+                {g.title}
+              </a>
+            </li>
+          ) : (
+            <li key={g.href}>
+              <Link className="hub-link" href={g.href}>
+                {g.title}
+              </Link>
+            </li>
+          ),
+        )}
       </ul>
     </div>
   );

@@ -51,36 +51,6 @@ a { color: inherit; }
 }
 .wrap.wide { max-width: 1000px; }
 
-/* world map quiz */
-.mq { margin-top: 6px; }
-.mq-hud {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  min-height: 38px;
-  margin-bottom: 14px;
-}
-.mq-lead { color: var(--dim); font-size: 14px; margin: 0; }
-.mq-target { font-size: 18px; }
-.mq-target b { color: var(--dl); font-weight: 700; }
-.mq-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--dim); }
-.mq-meta .mq-good { color: var(--good); }
-.mq-mapwrap { border: 1px solid var(--line); overflow: hidden; }
-.mq-map { display: block; width: 100%; height: auto; background: color-mix(in srgb, var(--dl) 12%, var(--bg)); }
-.mq-country {
-  fill: color-mix(in srgb, var(--ink) 15%, transparent);
-  stroke: var(--bg);
-  stroke-width: 0.5;
-  transition: fill 0.12s ease;
-}
-.mq-country.live { cursor: pointer; }
-.mq-country.live:hover { fill: color-mix(in srgb, var(--ink) 32%, transparent); }
-.mq-country.correct { fill: var(--good); }
-.mq-country.missed { fill: var(--tl); }
-.mq-country.wrong { fill: var(--bad); }
-
 /* header */
 .brand {
   display: flex;
