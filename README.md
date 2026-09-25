@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# psy.fun
 
-## Getting Started
+A little collection of games to play with — my take on [neal.fun](https://neal.fun).
+A single [Next.js](https://nextjs.org) app: a hub landing page that links out to
+each experience.
 
-First, run the development server:
+## What's inside
+
+| Route | What |
+| --- | --- |
+| `/` | The hub — lists the games. |
+| `/wordgap` | **wordgap** — fill the gap between two fixed letters. Distinct per-letter scores, ×2/×3 multiplier tiles, blind ranking, synonym/definition/rhyme hints (via the free [Datamuse](https://www.datamuse.com/api/) API), tiered dictionaries (1k–450k) with bonus words, a personal dictionary, and per-frame history with resume. |
+| `/wren/index.html` | **World Map Quiz** — a self-contained country-finding game, served statically from `public/wren/`. |
+
+The word engine (`/api/frame`, `/api/frame/guess`, `/api/frame/hint`, `/api/define`,
+`/api/frame/resume`) is stateless. Accounts + a personal dictionary/history are stored
+in a local SQLite file (`data/wordgap.db`, git-ignored, created on first run).
+
+## Run locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy (Render / any Node host)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+It's a standard Next.js server app:
 
-## Learn More
+- **Build command:** `npm install && npm run build`
+- **Start command:** `npm run start`
 
-To learn more about Next.js, take a look at the following resources:
+SQLite writes to `data/`, so give the service a writable disk if you want accounts
+to persist across restarts. The static quiz needs no server; it fetches its map data
+at runtime.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Adding a game
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Drop a self-contained build into `public/<name>/` (like `public/wren/`), or add a
+route under `app/<name>/`, then add a card to `GAMES` in `app/page.tsx`.
