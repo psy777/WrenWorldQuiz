@@ -221,8 +221,6 @@
                             <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
                             <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
                             <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
-                            <button data-value="oceanic" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Oceanic</button>
-                            <button data-value="detailed" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Detailed</button>
                             <button data-value="satellite" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Satellite</button>
                         </div>
                     </div>
@@ -527,7 +525,7 @@
             let playStyle = 'explore'; // 'explore', 'timed', 'paced', 'sprint'
             let tabOrder = 'random';
             let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme', 'mirror'
-            let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'oceanic', 'detailed', 'satellite'
+            let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'satellite'
             let quizSequence = [];
             let currentSequenceIndex = -1;
             let exploredCountries = {};
@@ -734,7 +732,7 @@
                         playStyle = progress.playStyle || 'explore';
                         difficulty = progress.difficulty || 'normal';
                         tabOrder = progress.tabOrder || 'random';
-                        theme = progress.theme || 'voyager';
+                        theme = themes[progress.theme] ? progress.theme : 'voyager';
                         quizStartTime = progress.quizStartTime || 0;
                         zenTimeElapsed = progress.zenTimeElapsed || 0;
                         timeRemaining = progress.timeRemaining; // Can be undefined, that's ok
@@ -900,34 +898,6 @@
                         correctFinished_savanna: { fillColor: '#c3b091', weight: 1, color: 'white', fillOpacity: 0.7 },
                     },
                     classes: { body: "bg-stone-300", container: "bg-stone-100", title: "text-yellow-900", settings: "bg-stone-200", settingTitle: "text-stone-700", settingRail: "bg-stone-300", settingInactive: "text-stone-500", settingActive: "bg-stone-50 text-stone-800 shadow" }
-                },
-                oceanic: {
-                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
-                    attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
-                    mapBg: '#005f73',
-                    styles: {
-                        default: { fillColor: '#2a9d8f', weight: 1, color: '#e9d8a6', fillOpacity: 0.7 },
-                        guessed: { fillColor: '#94d2bd', weight: 1, color: '#e9d8a6', fillOpacity: 0.8 },
-                        selected: { weight: 4, color: '#ee9b00', fillColor: '#fefae0' },
-                        correctFinished: { fillColor: '#94d2bd', weight: 1, color: 'black', fillOpacity: 0.9 },
-                        incorrectFinished: { fillColor: '#ae2012', weight: 1, color: 'white', fillOpacity: 0.9 },
-                        unclickable: { fillColor: '#bbdef0', weight: 1, color: '#9ca3af', fillOpacity: 0.5 },
-                    },
-                     classes: { body: "bg-cyan-100", container: "bg-cyan-50", title: "text-cyan-900", settings: "bg-cyan-100", settingTitle: "text-cyan-800", settingRail: "bg-cyan-200", settingInactive: "text-cyan-700", settingActive: "bg-white text-orange-600 shadow" }
-                },
-                detailed: {
-                    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                    mapBg: '#aad3df',
-                    styles: {
-                        default: { fillColor: '#3b82f6', weight: 1, color: '#1d4ed8', fillOpacity: 0.4 },
-                        guessed: { fillColor: '#16a34a', weight: 1, color: '#166534', fillOpacity: 0.5 },
-                        selected: { weight: 4, color: '#f59e0b', fillColor: '#facc15', fillOpacity: 0.5 },
-                        correctFinished: { fillColor: '#22c55e', weight: 1, color: 'white', fillOpacity: 0.7 },
-                        incorrectFinished: { fillColor: '#ef4444', weight: 1, color: 'white', fillOpacity: 0.7 },
-                        unclickable: { fillColor: '#9ca3af', weight: 1, color: '#4b5563', fillOpacity: 0.3 },
-                    },
-                    classes: { body: "bg-blue-100", container: "bg-white", title: "text-blue-900", settings: "bg-blue-50", settingTitle: "text-gray-700", settingRail: "bg-blue-200", settingInactive: "text-gray-500", settingActive: "bg-white text-blue-800 shadow" }
                 },
                 satellite: {
                     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -2327,8 +2297,6 @@
                         <p><strong>Voyager:</strong> The classic, light-mode map.</p>
                         <p><strong>Midnight:</strong> A sleek, dark-mode theme.</p>
                         <p><strong>Earth:</strong> A terrain-focused, natural-color theme.</p>
-                        <p><strong>Oceanic:</strong> A blue-hued theme emphasizing water bodies.</p>
-                        <p><strong>Detailed:</strong> A classic map style with all labels and roads.</p>
                         <p><strong>Satellite:</strong> High-resolution satellite imagery.</p>`
                 }
             };
