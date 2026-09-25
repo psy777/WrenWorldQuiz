@@ -2104,6 +2104,15 @@
             }
             
             document.addEventListener('keydown', (e) => {
+                // Enter keeps exploring (same as the Learn / Keep Exploring button),
+                // unless you're typing in a field or a button already has focus.
+                if (e.key === 'Enter' && quizState === 'explore') {
+                    const tag = (e.target && e.target.tagName) || '';
+                    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+                    e.preventDefault();
+                    exploreRandomCountry();
+                    return;
+                }
                 if (e.key === 'Tab' && quizState === 'playing') {
                     e.preventDefault();
                     if (difficulty === 'mirror') {
