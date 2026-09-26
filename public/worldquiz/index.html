@@ -204,6 +204,7 @@
                             <button data-value="timed" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Timed</button>
                             <button data-value="paced" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Paced</button>
                             <button data-value="sprint" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Sprint</button>
+                            <button data-value="label" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Label</button>
                         </div>
                     </div>
                     <div class="space-y-2">
@@ -228,6 +229,21 @@
                             <button data-value="hard" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Hard</button>
                             <button data-value="extreme" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Extreme</button>
                             <button data-value="mirror" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Mirror</button>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <h3 class="setting-title text-lg font-semibold text-gray-700">Continent</h3>
+                            <svg data-setting="continent" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                        </div>
+                        <div id="continent-options" class="setting-control flex flex-wrap p-1 rounded-lg">
+                            <button data-value="all" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">All</button>
+                            <button data-value="africa" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Africa</button>
+                            <button data-value="asia" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Asia</button>
+                            <button data-value="europe" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Europe</button>
+                            <button data-value="north-america" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm whitespace-nowrap">N. America</button>
+                            <button data-value="south-america" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm whitespace-nowrap">S. America</button>
+                            <button data-value="oceania" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Oceania</button>
                         </div>
                     </div>
                 </div>
@@ -532,8 +548,12 @@
             let geoJsonLayer, selectedCountryLayer = null, timerInterval = null, hintRevealInterval = null;
             let userAnswers = {}, countryData = {}, allCountries = [], countryPath = [];
             let countryDetails = {}; // To store data from countries.json
+            let labelAnswers = {}, labelMarkers = {}; // Label mode: your typed name per country + its map tooltip
+            let continent = 'all'; // active continent filter
+            let quizPool = []; // countries in play for the current game (continent-filtered)
+            let finishedGraded = null; // Set of names graded at finish (for the review map)
             let quizState = 'explore'; // 'explore', 'pre-start', 'playing', 'finished'
-            let playStyle = 'explore'; // 'explore', 'timed', 'paced', 'sprint'
+            let playStyle = 'explore'; // 'explore', 'timed', 'paced', 'sprint', 'label'
             let tabOrder = 'random';
             let difficulty = 'normal'; // 'easy', 'normal', 'hard', 'extreme', 'mirror'
             let theme = 'voyager'; // 'voyager', 'midnight', 'earth', 'satellite'
@@ -822,6 +842,7 @@
             const playStyleOptions = document.getElementById('play-style-options');
             const tabOrderOptions = document.getElementById('tab-order-options');
             const difficultyOptions = document.getElementById('difficulty-options');
+            const continentOptions = document.getElementById('continent-options');
             const themeOptions = document.getElementById('theme-options');
             const startQuizBtn = document.getElementById('start-quiz-btn');
             const settingsPanel = document.getElementById('settings-panel');
@@ -981,7 +1002,8 @@
                             const name = feature.properties.name;
                             if (name === 'Antarctica' || bundledCountries.includes(name)) return null;
                             const layer = countryData[name];
-                            return layer ? { name, layer, normalized: normalize(name) } : null;
+                            const details = countryDetails[normalize(name)] || countryDetails[reverseAliases[normalize(name)]] || {};
+                            return layer ? { name, layer, normalized: normalize(name), continent: details.continent || '' } : null;
                         })
                         .filter(Boolean);
 
@@ -1145,7 +1167,9 @@
                         if (quizState === 'explore') {
                             showCountryInfo(mainLayer);
                         } else if (quizState === 'playing') {
-                            if (difficulty === 'mirror') {
+                            if (playStyle === 'label') {
+                                selectForLabel(mainLayer);
+                            } else if (difficulty === 'mirror') {
                                 handleMirrorModeClick(mainLayer);
                             } else {
                                 selectCountry(mainLayer);
@@ -1465,6 +1489,51 @@
                 countrySelectedTimestamp = Date.now();
             }
 
+            // --- LABEL MODE: click a country, type its name, grade at the end ---
+            function setLabelTooltip(name, layer, text) {
+                if (labelMarkers[name]) { tooltipLayerGroup.removeLayer(labelMarkers[name]); delete labelMarkers[name]; }
+                if (!text) return;
+                labelMarkers[name] = L.marker(getVisualCenter(layer), { opacity: 0 })
+                    .bindTooltip(text, { permanent: true, direction: 'center', className: 'permanent-tooltip' })
+                    .addTo(tooltipLayerGroup);
+            }
+            function styleLabelCountry(layer) {
+                const name = layer.feature.properties.name;
+                const labeled = !!(labelAnswers[name] && labelAnswers[name].trim());
+                const styleKey = labeled ? (theme === 'earth' ? `guessed_${getCountryBiome(name)}` : 'guessed') : 'default';
+                const style = getStyle(styleKey);
+                layer.setStyle(style);
+                getRelatedLayers(layer).forEach(l => l.setStyle(style));
+            }
+            function selectForLabel(layer) {
+                if (!layer) return;
+                const name = layer.feature.properties.name;
+                if (!quizPool.some(c => c.name === name)) return; // outside the chosen continent
+                if (selectedCountryLayer && selectedCountryLayer !== layer) commitLabel(); // auto-save the previous one
+                selectedCountryLayer = layer;
+                const sel = getStyle('selected');
+                layer.setStyle(sel);
+                getRelatedLayers(layer).forEach(l => l.setStyle(sel));
+                layer.bringToFront();
+                guessInput.value = labelAnswers[name] || '';
+                guessInput.placeholder = 'Type this country, then Enter';
+                guessInput.focus();
+                guessInput.select();
+            }
+            function commitLabel() {
+                if (!selectedCountryLayer) return;
+                const name = selectedCountryLayer.feature.properties.name;
+                const text = guessInput.value.trim();
+                if (text) { labelAnswers[name] = text; userAnswers[name] = true; }
+                else { delete labelAnswers[name]; delete userAnswers[name]; }
+                setLabelTooltip(name, selectedCountryLayer, text);
+                styleLabelCountry(selectedCountryLayer);
+                selectedCountryLayer = null;
+                guessInput.value = '';
+                guessInput.placeholder = 'Click a country to label it';
+                updateScoreDisplay();
+            }
+
             function updateHintDisplay() {
                 if (!selectedCountryLayer) return;
                 const name = selectedCountryLayer.feature.properties.name;
@@ -1678,8 +1747,16 @@
                 return false;
             }
 
+            // In label mode you commit on Enter (right or wrong); no live auto-grading.
+            guessInput.addEventListener('keydown', (e) => {
+                if (playStyle === 'label' && quizState === 'playing' && e.key === 'Enter') {
+                    e.preventDefault();
+                    commitLabel();
+                }
+            });
+
             guessInput.addEventListener('input', () => {
-                if (difficulty === 'mirror' || !selectedCountryLayer) return;
+                if (playStyle === 'label' || difficulty === 'mirror' || !selectedCountryLayer) return;
                 const guess = guessInput.value;
                 const correctName = selectedCountryLayer.feature.properties.name;
                 
@@ -1767,11 +1844,14 @@
                 if(progressBarLength) timerProgressBar.style.strokeDashoffset = progressBarLength;
             }
 
-            function updateScoreDisplay() { 
-                if (playStyle === 'sprint') {
-                    scoreDisplay.textContent = `Score: ${score}`; 
+            function updateScoreDisplay() {
+                const denom = (quizPool && quizPool.length) ? quizPool.length : allCountries.length;
+                if (playStyle === 'label') {
+                    if (quizState === 'playing') scoreDisplay.textContent = `Labeled: ${Object.keys(labelAnswers).length}/${denom}`;
+                } else if (playStyle === 'sprint') {
+                    scoreDisplay.textContent = `Score: ${score}`;
                 } else if (quizState === 'playing') {
-                    scoreDisplay.textContent = `Guessed: ${Object.keys(userAnswers).length}/${allCountries.length}`;
+                    scoreDisplay.textContent = `Guessed: ${Object.keys(userAnswers).length}/${denom}`;
                 }
             }
 
@@ -1841,6 +1921,8 @@
                     guessInput.classList.add('hidden');
                     tabOrderOptions.parentElement.classList.remove('disabled');
                     difficultyOptions.parentElement.classList.remove('disabled');
+                    // Label mode is free-form (no prompt sequence), so tab order doesn't apply.
+                    tabOrderOptions.parentElement.classList.toggle('disabled', playStyle === 'label');
                     countryInfoPanel.classList.add('opacity-0', '-translate-x-4', 'pointer-events-none');
                     selectedCountryLayer = null;
                 }
@@ -1878,6 +1960,32 @@
                 const value = handleSettingClick(e, 'theme-options');
                 if(value) applyTheme(value);
             });
+            continentOptions.addEventListener('click', (e) => {
+                const value = handleSettingClick(e, 'continent-options');
+                if (value) continent = value;
+            });
+
+            // --- CONTINENT FILTER ---
+            const CONTINENT_NAME = {
+                africa: 'africa', asia: 'asia', europe: 'europe',
+                'north-america': 'north america', 'south-america': 'south america', oceania: 'oceania',
+            };
+            function inContinent(country, cont) {
+                if (cont === 'all') return true;
+                return (country.continent || '').toLowerCase().includes(CONTINENT_NAME[cont] || cont);
+            }
+            function poolForContinent() {
+                const pool = allCountries.filter(c => inContinent(c, continent));
+                return pool.length ? pool : allCountries.slice();
+            }
+            function fitToPool() {
+                if (continent === 'all' || !quizPool.length) { map.setView([20, 0], 2); return; }
+                let b = null;
+                quizPool.forEach(c => {
+                    try { const bb = c.layer.getBounds(); b = b ? b.extend(bb) : L.latLngBounds(bb.getSouthWest(), bb.getNorthEast()); } catch (_) {}
+                });
+                if (b) map.fitBounds(b.pad(0.15));
+            }
 
             // Header menu (hamburger) holding the theme picker + profile.
             const menuBtn = document.getElementById('menu-btn');
@@ -1905,7 +2013,28 @@
                 finishAttemptBtn.style.display = 'inline-block';
                 finishAttemptBtn.disabled = false;
                 guessInput.classList.remove('hidden');
-                
+                quizStartTime = Date.now();
+                quizPool = poolForContinent();
+
+                // --- Label mode: free-form; click any country and name it, grade at the end ---
+                if (playStyle === 'label') {
+                    userAnswers = {}; labelAnswers = {};
+                    tooltipLayerGroup.clearLayers(); labelMarkers = {};
+                    selectedCountryLayer = null;
+                    guessInput.readOnly = false;
+                    guessInput.value = '';
+                    guessInput.placeholder = 'Click a country to label it';
+                    const scope = continent === 'all' ? 'the world' : `${quizPool.length} countries`;
+                    subtitle.textContent = difficulty === 'extreme'
+                        ? `Extreme: label what you can — every country in ${scope} is graded.`
+                        : `Click a country and name it. Finish whenever — only your labels are graded.`;
+                    statusDisplayContainer.classList.add('hidden');
+                    scoreDisplay.classList.remove('hidden');
+                    updateScoreDisplay();
+                    fitToPool();
+                    return;
+                }
+
                 if (difficulty === 'mirror') {
                     subtitle.textContent = "Click the prompted country on the map.";
                     guessInput.readOnly = true;
@@ -1913,22 +2042,20 @@
                     subtitle.textContent = "Click a country or press Tab for a new one!";
                     guessInput.readOnly = false;
                     guessInput.placeholder = 'Type country name...';
-                    finishAttemptBtn.disabled = true; 
+                    finishAttemptBtn.disabled = true;
                 }
-                
-                quizStartTime = Date.now();
 
                 if (!progressBarLength) {
                     progressBarLength = timerProgressBar.getTotalLength();
                     timerProgressBar.style.strokeDasharray = progressBarLength;
                     timerProgressBar.style.strokeDashoffset = progressBarLength;
                 }
-                
+
                 if (playStyle === 'sprint') scoreDisplay.classList.remove('hidden');
-                
+
                 quizSequence = [];
                 currentSequenceIndex = -1;
-                const countriesForQuiz = allCountries.slice();
+                const countriesForQuiz = quizPool.slice();
 
                 switch(tabOrder) {
                     case 'alphabetical': quizSequence = countriesForQuiz; break;
@@ -1937,7 +2064,7 @@
                         const addedCountries = new Set();
                         quizSequence = [];
                         countryPath.forEach(pathName => {
-                            const countriesToAdd = allCountries.filter(c => c.normalized === pathName || countryAliases[pathName] === c.normalized || (specialCases[pathName] && specialCases[pathName].includes(c.normalized)));
+                            const countriesToAdd = countriesForQuiz.filter(c => c.normalized === pathName || countryAliases[pathName] === c.normalized || (specialCases[pathName] && specialCases[pathName].includes(c.normalized)));
                             countriesToAdd.forEach(country => {
                                 if (!addedCountries.has(country.name)) {
                                     quizSequence.push(country);
@@ -1945,7 +2072,7 @@
                                 }
                             });
                         });
-                        quizSequence.push(...allCountries.filter(c => !addedCountries.has(c.name)).sort((a,b) => a.name.localeCompare(b.name)));
+                        quizSequence.push(...countriesForQuiz.filter(c => !addedCountries.has(c.name)).sort((a,b) => a.name.localeCompare(b.name)));
                         break;
                     case 'random':
                     default:
@@ -1956,10 +2083,11 @@
                         quizSequence = countriesForQuiz;
                         break;
                 }
-                
+
                 statusDisplayContainer.classList.remove('hidden');
+                fitToPool();
                 if (playStyle === 'timed' || playStyle === 'zen') startTimer();
-                
+
                 if (difficulty === 'mirror') {
                     if (playStyle === 'paced') startPacedTimer();
                     promptNextMirrorCountry();
@@ -1980,43 +2108,65 @@
                 quizState = 'finished';
                 const timeSpent = Math.round((Date.now() - quizStartTime) / 1000);
                 stopAllTimers();
-                
-                let correctCount = Object.keys(userAnswers).length;
+
+                const pool = (quizPool && quizPool.length) ? quizPool : allCountries;
+                const poolNames = new Set(pool.map(c => c.name));
+                let correctCount = 0;
+                let denominator = pool.length;
                 let missesHTML = '';
-                
+
+                if (playStyle === 'label') {
+                    // Grade the labels you filled in (extreme: every country in the pool).
+                    const gradeAll = difficulty === 'extreme';
+                    const names = gradeAll ? pool.map(c => c.name) : Object.keys(labelAnswers).filter(n => poolNames.has(n));
+                    finishedGraded = new Set(names);
+                    userAnswers = {};
+                    names.forEach(name => {
+                        const label = (labelAnswers[name] || '').trim();
+                        if (label && isGuessCorrect(label, name)) { userAnswers[name] = true; correctCount++; }
+                        else {
+                            const yours = label ? `you put &ldquo;${label}&rdquo;` : 'left blank';
+                            missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800"><strong>${name}</strong> — ${yours}.</div>`;
+                        }
+                    });
+                    denominator = names.length;
+                    if (denominator === 0) missesHTML = `<p class="text-gray-600">You didn't label any countries.</p>`;
+                    else if (missesHTML === '') missesHTML = `<p class="text-green-700">Perfect — every label correct!</p>`;
+                } else {
+                    finishedGraded = null;
+                    correctCount = Object.keys(userAnswers).filter(n => poolNames.has(n)).length;
+                    geoJsonLayer.eachLayer(layer => {
+                        const name = layer.feature.properties.name;
+                        if (!poolNames.has(name)) return;
+                        if (name === 'Antarctica' || bundledCountries.includes(name) || name === 'Falkland Islands (Malvinas)') return;
+                        const isGuessed = userAnswers[name];
+                        const wasMissed = layer.options.fillColor === getStyle('incorrectFinished').fillColor;
+                        if (!isGuessed || wasMissed) {
+                            missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800">You missed: <strong>${name}</strong>.</div>`;
+                        }
+                    });
+                    if (missesHTML === '') missesHTML = `<p class="text-green-700">Perfect score!</p>`;
+                }
+
                 const gameResult = {
                     playStyle: playStyle,
                     timeSpent: timeSpent,
                     correctCount: correctCount,
-                    totalCountries: allCountries.length,
+                    totalCountries: denominator,
                     sprintScore: score
                 };
                 if (playStyle !== 'explore') {
                     updateProfileStats(gameResult);
                 }
 
-                geoJsonLayer.eachLayer(layer => {
-                    const name = layer.feature.properties.name;
-                    if (name === 'Antarctica' || bundledCountries.includes(name) || name === 'Falkland Islands (Malvinas)') return;
-
-                    const isGuessed = userAnswers[name];
-                    const wasMissed = layer.options.fillColor === getStyle('incorrectFinished').fillColor;
-
-                    if (!isGuessed || wasMissed) {
-                         missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800">You missed: <strong>${name}</strong>.</div>`;
-                    }
-                });
-
-                if(missesHTML === '') missesHTML = `<p class="text-green-700">Perfect score!</p>`;
-
                 if (reason === 'time') {
                     scoreTitle.textContent = "Time's Up!";
                 } else {
                     scoreTitle.textContent = "Your Score";
                 }
-                
-                finalScoreDisplay.textContent = `${correctCount}/${allCountries.length}`;
-                scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${allCountries.length} countries.`;
+
+                finalScoreDisplay.textContent = `${correctCount}/${denominator}`;
+                scoreDetailsDisplay.textContent = `You correctly identified ${correctCount} out of ${denominator} countries.`;
                 missesContainer.innerHTML = missesHTML;
                 
                 const finalTime = (playStyle === 'zen') ? zenTimeElapsed : timeSpent;
@@ -2064,15 +2214,24 @@
                 scoreDisplay.classList.add('hidden');
                 statusDisplayContainer.classList.add('hidden');
                 tooltipLayerGroup.clearLayers();
-                
+                labelMarkers = {};
+
+                // Only review the countries that were actually graded — the pool (by
+                // continent), and in label-non-extreme just the ones you labelled.
+                const pool = (quizPool && quizPool.length) ? quizPool : allCountries;
+                const relevant = finishedGraded || new Set(pool.map(c => c.name));
+
                 geoJsonLayer.eachLayer(layer => {
                     const countryName = layer.feature.properties.name;
                     if (countryName === 'Antarctica') return;
                     layer.unbindTooltip();
-                    
+
+                    const inScope = relevant.has(countryName) || (countryBundles[countryName] && relevant.has(countryBundles[countryName]));
+                    if (!inScope) { layer.setStyle(getStyle('default')); return; }
+
                     let styleKey;
                     const isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
-                    
+
                     if (isGuessed) {
                         if (theme === 'earth') {
                             const biome = getCountryBiome(countryName);
@@ -2084,7 +2243,7 @@
                         styleKey = 'incorrectFinished';
                     }
                     layer.setStyle(getStyle(styleKey));
-                    
+
                     const center = getVisualCenter(layer);
                     L.marker(center, { opacity: 0 })
                         .bindTooltip(countryName, { permanent: true, direction: 'center', className: 'permanent-tooltip' })
@@ -2113,6 +2272,10 @@
                 });
 
                 userAnswers = {};
+                labelAnswers = {};
+                labelMarkers = {};
+                finishedGraded = null;
+                quizPool = [];
                 selectedCountryLayer = null;
                 guessInput.value = '';
                 guessInput.placeholder = 'Type country name...';
@@ -2144,7 +2307,7 @@
                     exploreRandomCountry();
                     return;
                 }
-                if (e.key === 'Tab' && quizState === 'playing') {
+                if (e.key === 'Tab' && quizState === 'playing' && playStyle !== 'label') {
                     e.preventDefault();
                     if (difficulty === 'mirror') {
                         if (e.shiftKey) {
@@ -2163,6 +2326,8 @@
             });
 
             function resumeQuiz() {
+                // Label mode is free-form and not resumed — the player just presses Start again.
+                if (playStyle === 'label') { updatePlayStyleUI('label'); return; }
                 quizState = 'playing';
                 startQuizBtn.classList.add('hidden');
                 settingsPanel.classList.add('disabled');
@@ -2313,7 +2478,13 @@
                         <p><strong>Explore:</strong> Freely browse the map, learn facts about each country, and take an optional mini-quiz.</p>
                         <p><strong>Timed:</strong> A 15-minute timer for the entire quiz.</p>
                         <p><strong>Paced:</strong> 15 seconds to guess each country.</p>
-                        <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.`
+                        <p><strong>Sprint:</strong> A fast-paced mode with score multipliers for quick, consecutive answers.</p>
+                        <p><strong>Label:</strong> Click any country and type its name — fill in as many as you like, at your own pace. When you finish, only the countries you labelled are graded (in Extreme, every country in the pool is graded).</p>`
+                },
+                continent: {
+                    title: 'Continent',
+                    content: `
+                        <p>Limit the quiz to a single continent — only those countries are shown, graded, and counted. Choose <strong>All</strong> for the whole world.</p>`
                 },
                 tabOrder: {
                     title: 'Tab Order',
