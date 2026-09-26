@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 type Game = { href: string; title: string; static?: boolean };
 
 const GAMES: Game[] = [
-  { href: "/wordgap", title: "wordgap" },
+  { href: "/wordgap", title: "Wordgap" },
   // The quiz is a standalone static app — full navigation, not client routing.
   { href: "/wren", title: "World Map Quiz", static: true },
 ];

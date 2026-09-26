@@ -70,6 +70,20 @@ a { color: inherit; }
 .brandleft { display: flex; align-items: center; gap: 12px; }
 .hubback { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-decoration: none; }
 .hubback:hover { color: var(--ink); }
+/* The wren.gg wordmark — the same static mark on every page (sans-serif, accent .gg). */
+.wordmark {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--ink);
+  text-decoration: none;
+}
+.wordmark b { color: var(--accent); font-weight: 700; }
+.wordmark:hover { opacity: 0.75; }
+/* The "/ game" that follows it — in the game's own font (inherits the page family). */
+.brand .crumb { color: var(--dim); font-weight: 400; align-self: center; }
 .brandleft .icon { padding: 0; }
 .brandleft .ico-mask { width: 14px; height: 14px; }
 .modeicons { display: flex; align-items: center; gap: 10px; }

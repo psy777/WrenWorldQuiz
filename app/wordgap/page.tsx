@@ -102,9 +102,10 @@ export default function Home() {
     <div className="wrap">
       <div className="brand">
         <div className="brandleft">
-          <Link href="/" className="hubback" title="All games">
-            wren.gg /
+          <Link href="/" className="wordmark" title="All games">
+            wren<b>.gg</b>
           </Link>
+          <span className="crumb">/</span>
           <h1 onClick={() => setTab("play")} style={{ cursor: "pointer" }} title="Home">
             wordgap
           </h1>
