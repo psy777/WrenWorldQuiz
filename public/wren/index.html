@@ -1199,7 +1199,6 @@
                 const exploredCount = Object.keys(exploredCountries).length;
                 const totalCount = allCountries.length;
                 exploredCounter.textContent = `Explored: ${exploredCount}/${totalCount}`;
-                subtitle.textContent = "Select a country to learn more about it.";
             }
 
             function showCountryInfo(layer) {
@@ -1249,6 +1248,8 @@
                 quizFeedback.classList.add('hidden');
                 quizSection.classList.remove('hidden');
                 quizSection.dataset.correctAnswer = correctAnswer;
+                // Focus the answer box so you can type right away on a new country.
+                quizAnswerInput.focus();
             }
 
             function hideQuiz() {
