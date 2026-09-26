@@ -221,7 +221,12 @@ export default function InfiniteMode({
       topWord: newFinds.find((f) => f.rank === 1)?.word ?? null,
       words: newFinds.map((f) => f.word),
     });
-    const { totalScore } = saveFound(word, data.score, timeBonus);
+    const { totalScore } = saveFound(word, data.score, timeBonus, {
+      start: frame.start,
+      end: frame.end,
+      len: frame.len,
+      bonuses: frame.bonuses,
+    });
     onScore(totalScore);
   }, [frame, typed, midLen, finds, activeTier, onScore, onPoints]);
 

@@ -2,19 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { jget } from "@/lib/api";
+import type { WordFrame } from "@/lib/local-store";
 
 type DefData = { ok: boolean; word: string; defs: string[]; related: string[] };
 
 // A popup card with a word's definition and tappable related words.
 // `onPick` swaps the card to a related word so you can wander the thesaurus.
+// `frame`/`score`, when given, show the frame where the best score was earned.
 export default function DefinitionModal({
   word,
   exclude,
+  frame,
+  score,
   onClose,
   onPick,
 }: {
   word: string;
   exclude?: string;
+  frame?: WordFrame;
+  score?: number;
   onClose: () => void;
   onPick: (w: string) => void;
 }) {
@@ -36,6 +42,24 @@ export default function DefinitionModal({
           ×
         </button>
         <div className="big defword">{word}</div>
+        {frame && frame.len === word.length && (
+          <div className="defframe-wrap">
+            <div className="defframe-label">
+              your best{typeof score === "number" ? <> — <b>{score}</b> pts</> : ""}
+            </div>
+            <div className="ftiles defframe">
+              {word.split("").map((ch, i) => {
+                const m = frame.bonuses.find((b) => b.index === i)?.mult;
+                return (
+                  <span key={i} className={`ftile ${m === 2 ? "dl" : m === 3 ? "tl" : ""}`}>
+                    {ch.toUpperCase()}
+                    {m ? <span className="dfmx">×{m}</span> : null}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {!data ? (
           <p className="muted">looking it up…</p>
         ) : (

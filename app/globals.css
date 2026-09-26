@@ -744,6 +744,15 @@ button.icon:hover, button.icon.on { color: var(--ink); }
 .defword { font-size: 22px; font-weight: 700; font-style: italic; margin-bottom: 6px; }
 .deflist { margin: 6px 0 0; padding-left: 18px; color: var(--dim); font-size: 13px; line-height: 1.6; }
 .deflist li { margin: 4px 0; }
+/* the frame where a dictionary word earned its best score */
+.defframe-wrap { margin: 12px 0 2px; }
+.defframe-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin-bottom: 7px; }
+.defframe-label b { color: var(--ink); }
+.defframe .ftile { width: 26px; height: 30px; font-size: 14px; position: relative; overflow: visible; }
+.defframe .ftile.dl, .defframe .ftile.tl { font-size: 14px; }
+.defframe .dfmx { position: absolute; top: -6px; right: -4px; font-size: 8px; font-weight: 700; line-height: 1; padding: 0 1px; background: var(--bg); }
+.defframe .ftile.dl .dfmx { color: var(--dl); }
+.defframe .ftile.tl .dfmx { color: var(--tl); }
 /* related words (tappable chips) in the definition popup */
 .synrow { margin-top: 14px; }
 .synrow > .muted { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }

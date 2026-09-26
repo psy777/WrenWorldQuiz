@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listFound } from "@/lib/local-store";
+import { listFound, type FoundWord } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
-type Entry = { word: string; score: number; createdAt: number };
-type Sort = "az" | "hi" | "lo";
+type Sort = "az" | "hi" | "lo" | "avg";
+type Def = { word: string; frame?: FoundWord["frame"]; score?: number };
+
+const perLetter = (w: FoundWord) => w.score / Math.max(1, w.word.length);
 
 export default function Dictionary() {
-  const [words, setWords] = useState<Entry[] | null>(null);
-  const [defWord, setDefWord] = useState<string | null>(null);
+  const [words, setWords] = useState<FoundWord[] | null>(null);
+  const [def, setDef] = useState<Def | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("az");
 
@@ -23,7 +25,8 @@ export default function Dictionary() {
     const list = needle ? words.filter((w) => w.word.includes(needle)) : [...words];
     if (sort === "az") list.sort((a, b) => a.word.localeCompare(b.word));
     else if (sort === "hi") list.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word));
-    else list.sort((a, b) => a.score - b.score || a.word.localeCompare(b.word));
+    else if (sort === "lo") list.sort((a, b) => a.score - b.score || a.word.localeCompare(b.word));
+    else list.sort((a, b) => perLetter(b) - perLetter(a) || a.word.localeCompare(b.word));
     return list;
   }, [words, q, sort]);
 
@@ -48,6 +51,9 @@ export default function Dictionary() {
           <button className={sort === "lo" ? "on" : ""} onClick={() => setSort("lo")}>
             pts ↑
           </button>
+          <button className={sort === "avg" ? "on" : ""} onClick={() => setSort("avg")} title="Average points per letter">
+            pts/ltr ↓
+          </button>
         </div>
       </div>
 
@@ -62,15 +68,30 @@ export default function Dictionary() {
       ) : (
         <div className="dictgrid">
           {shown.map((w) => (
-            <button key={w.word} className="dictword" onClick={() => setDefWord(w.word)} title="Tap for its definition">
+            <button
+              key={w.word}
+              className="dictword"
+              onClick={() => setDef({ word: w.word, frame: w.frame, score: w.score })}
+              title="Tap for its definition"
+            >
               <span className="dw">{w.word}</span>
-              <span className="ds">{w.score}</span>
+              <span className="ds" title={sort === "avg" ? `${w.score} pts` : undefined}>
+                {sort === "avg" ? `${perLetter(w).toFixed(1)}/ltr` : w.score}
+              </span>
             </button>
           ))}
         </div>
       )}
 
-      {defWord && <DefinitionModal word={defWord} onClose={() => setDefWord(null)} onPick={setDefWord} />}
+      {def && (
+        <DefinitionModal
+          word={def.word}
+          frame={def.frame}
+          score={def.score}
+          onClose={() => setDef(null)}
+          onPick={(w) => setDef({ word: w })}
+        />
+      )}
     </div>
   );
 }

@@ -3,7 +3,9 @@
 // Everything wordgap used to keep in SQLite behind an account now lives in the
 // browser, like the other games on the hub. One JSON blob under a single key.
 
-export type FoundWord = { word: string; score: number; createdAt: number };
+// The frame a word was found in — enough to redraw it (letters come from the word).
+export type WordFrame = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[] };
+export type FoundWord = { word: string; score: number; createdAt: number; frame?: WordFrame };
 
 export type FrameRecord = {
   frameId: string;
@@ -57,15 +59,23 @@ export function getTotalScore(): number {
 
 // Save a freshly found word and (once per distinct word) bank its points plus any
 // time bonus. Best score seen for a word wins; first-found time is preserved.
-export function saveFound(word: string, score: number, timeBonus = 0): { totalScore: number; isNew: boolean } {
+export function saveFound(
+  word: string,
+  score: number,
+  timeBonus = 0,
+  frame?: WordFrame,
+): { totalScore: number; isNew: boolean } {
   const s = read();
   const w = word.toLowerCase();
   const existing = s.found[w];
   const isNew = !existing;
+  const isBest = !existing || score > existing.score;
   s.found[w] = {
     word: w,
     score: Math.max(score, existing?.score ?? 0),
     createdAt: existing?.createdAt ?? Date.now(),
+    // Keep the frame that produced the best score for this word.
+    frame: isBest ? frame ?? existing?.frame : existing?.frame,
   };
   if (isNew) s.score += score + Math.max(0, Math.floor(timeBonus));
   write(s);
