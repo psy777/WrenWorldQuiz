@@ -140,7 +140,10 @@ export default function InfiniteMode({
 
   const activeTier = daily ? DAILY_TIER : tier;
 
-  const loadFrame = useCallback(async () => {
+  // `fresh` = the player asked for a new random frame (New / Next frame). Without it
+  // we honour a pending resume. We DON'T consume resumeRef here, so React's dev
+  // double-invoke of this effect can't fall through to a random frame.
+  const loadFrame = useCallback(async (fresh = false) => {
     setNotice(null);
     setHint(null);
     setStatsClosed(false);
@@ -148,6 +151,7 @@ export default function InfiniteMode({
     setTyped([]);
     setFinds([]);
     frameStart.current = Date.now();
+    if (fresh) resumeRef.current = null;
     if (daily) {
       const fid = `daily-${daily.date}`;
       frameId.current = fid;
@@ -165,7 +169,6 @@ export default function InfiniteMode({
     }
     const r = resumeRef.current;
     if (r) {
-      resumeRef.current = null; // consume, so a later New frame loads a random one
       onResumeConsumed();
       frameId.current = r.frameId;
       const { data } = await jpost<Frame & { finds?: Find[] }>("/api/frame/resume", {
@@ -487,7 +490,7 @@ export default function InfiniteMode({
             <span className="toollabel">Share</span>
           </button>
         ) : (
-          <button className="toolbtn" onClick={loadFrame} title="New frame">
+          <button className="toolbtn" onClick={() => loadFrame(true)} title="New frame">
             <span className="ico-mask ico-refresh" />
             <span className="toollabel">New frame</span>
           </button>
@@ -638,7 +641,7 @@ export default function InfiniteMode({
                   Share
                 </button>
               ) : (
-                <button className="btn" onClick={loadFrame}>
+                <button className="btn" onClick={() => loadFrame(true)}>
                   New frame
                 </button>
               )}
@@ -683,7 +686,7 @@ export default function InfiniteMode({
                   Share result
                 </button>
               ) : (
-                <button className="btn primary" onClick={loadFrame}>
+                <button className="btn primary" onClick={() => loadFrame(true)}>
                   Next frame →
                 </button>
               )}
