@@ -381,6 +381,8 @@ export default function InfiniteMode({
   const inTierFound = finds.length - bonusFinds.length;
   const wordsPct = frame.total > 0 ? Math.round((inTierFound / frame.total) * 100) : 0;
   const frameComplete = frame.total > 0 && inTierFound === frame.total;
+  // When the frame is done and you're not mid-word, display the winning word in the tiles.
+  const showTop = frameComplete && typed.length === 0 && !!topFind;
   const framePoints = finds.reduce((s, f) => s + f.score, 0); // total points earned on this frame
   const frameBonus = completionBonus(frame.total, frame.len); // scales with frame difficulty
 
@@ -406,8 +408,17 @@ export default function InfiniteMode({
             const isStart = i === 0;
             const isEnd = i === frame.len - 1;
             const fixed = isStart || isEnd;
-            const ch = isStart ? frame.start : isEnd ? frame.end : typed[i - 1] ?? "";
-            const active = !fixed && i - 1 === typed.length && typed.length < midLen;
+            // Once the frame is filled, show the top word across the tiles (like the
+            // solved frames in history) — but yield to live typing for bonus words.
+            const solved = showTop;
+            const ch = isStart
+              ? frame.start
+              : isEnd
+                ? frame.end
+                : solved && topFind
+                  ? topFind.word[i].toUpperCase()
+                  : typed[i - 1] ?? "";
+            const active = !fixed && !solved && i - 1 === typed.length && typed.length < midLen;
             const mult = bonusAt.get(i);
             const bonusVar = mult === 3 ? "var(--tl)" : "var(--dl)";
             const cls = [
@@ -415,6 +426,7 @@ export default function InfiniteMode({
               fixed ? "fixed" : "",
               ch && !fixed ? "on" : "",
               active ? "active" : "",
+              solved ? "solved" : "",
               mult === 2 ? "dl" : mult === 3 ? "tl" : "",
             ]
               .filter(Boolean)
@@ -427,7 +439,7 @@ export default function InfiniteMode({
                   </span>
                 )}
                 <span className="ch">{ch}</span>
-                {ch && (
+                {ch && !solved && (
                   <span className={`val ${mult ? "boosted" : ""}`} style={mult ? { color: bonusVar } : undefined}>
                     {letterValue(ch) * (mult ?? 1)}
                   </span>

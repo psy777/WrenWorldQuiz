@@ -334,6 +334,9 @@ button.icon:hover, button.icon.on { color: var(--ink); }
 .tile.fixed { border-color: var(--line-strong); }
 .tile.on { border-color: var(--line-strong); }
 .tile.active { border-color: var(--ink); }
+/* completed frame: the top word shown across the tiles (like solved frames in history) */
+.tile.solved { border-color: var(--good); background: var(--good); color: #fff; transition: background 0.25s ease, border-color 0.25s ease; }
+.tile.solved .ch { color: #fff; }
 .tile .ch { line-height: 1; }
 /* Scrabble-style point value tucked into the bottom corner */
 .tile .val {
