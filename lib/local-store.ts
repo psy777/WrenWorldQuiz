@@ -59,6 +59,14 @@ export function getTotalScore(): number {
   return read().score;
 }
 
+// Add points to the running total (e.g. a frame-completion bonus); returns the new total.
+export function addScore(points: number): number {
+  const s = read();
+  s.score += points;
+  write(s);
+  return s.score;
+}
+
 // Save a freshly found word and (once per distinct word) bank its points plus any
 // time bonus. Best score seen for a word wins; first-found time is preserved.
 export function saveFound(

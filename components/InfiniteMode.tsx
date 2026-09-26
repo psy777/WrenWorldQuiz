@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { jget, jpost } from "@/lib/api";
 import { letterValue, type Bonus } from "@/lib/scoring";
-import { frameWords, getFrame, markFrameSeen, recordFrame, saveFound } from "@/lib/local-store";
+import { addScore, frameWords, getFrame, markFrameSeen, recordFrame, saveFound } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
 // A ring of particles. `n`/`dist` control how many and how far they fly.
@@ -79,6 +79,7 @@ type ResumeReq = { start: string; end: string; len: number; bonuses: { index: nu
 // Keep in sync with DAILY_TIER in lib/dictionary.ts — the daily is played at a
 // fixed tier so the frame and its answers are identical for everyone.
 const DAILY_TIER = "10k";
+const FRAME_BONUS = 1000; // extra points for filling the whole frame
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function prettyDate(date: string): string {
   const [, m, d] = date.split("-").map(Number);
@@ -222,14 +223,18 @@ export default function InfiniteMode({
     setSubmitPop({ id: (seq.current += 1), text: `${word.toUpperCase()} +${data.score} pts` });
     // extra points for time spent on the frame (+1 per 8s, capped)
     const timeBonus = Math.min(25, Math.floor((Date.now() - frameStart.current) / 8000));
-    onPoints(data.score + timeBonus); // "+N pts" floats up by the profile
     if (data.bonus) setBarBurst((seq.current += 1)); // celebrate a bonus word on the finds bar
+    const prevInTier = finds.filter((f) => !f.bonus).length;
     const inTierFound = newFinds.filter((f) => !f.bonus).length;
-    // Filling the whole frame is the goal — the biggest celebration + its own popup.
-    if (data.total > 0 && inTierFound === data.total) {
+    // Filling the whole frame is the goal — award a one-time bonus on the completing
+    // move only (not again for a bonus word found after the frame is already full).
+    const justCompleted = data.total > 0 && prevInTier < data.total && inTierFound === data.total;
+    if (justCompleted) {
       setCompleteBurst((seq.current += 1));
       setCompleteClosed(false);
+      addScore(FRAME_BONUS);
     }
+    onPoints(data.score + timeBonus + (justCompleted ? FRAME_BONUS : 0)); // "+N pts" floats up by the profile
     recordFrame({
       frameId: frameId.current,
       startLetter: frame.start,
@@ -644,16 +649,16 @@ export default function InfiniteMode({
             </p>
             <div className="statrow">
               <div>
-                <b>{framePoints}</b>
+                <b>{framePoints + FRAME_BONUS}</b>
                 <span>total points</span>
+              </div>
+              <div>
+                <b>+{FRAME_BONUS}</b>
+                <span>frame bonus</span>
               </div>
               <div>
                 <b>{frame.total}</b>
                 <span>words</span>
-              </div>
-              <div>
-                <b>{bonusFinds.length}</b>
-                <span>bonus</span>
               </div>
             </div>
             <div className="statbtns">
