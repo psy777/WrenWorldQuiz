@@ -120,10 +120,10 @@
                         <div id="menu-pop" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-30 text-left">
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 px-1">Theme</div>
                             <div id="theme-options" class="setting-control flex flex-wrap p-1 rounded-lg">
-                                <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
-                                <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
-                                <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
-                                <button data-value="satellite" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Satellite</button>
+                                <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Light</button>
+                                <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Dark</button>
+                                <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Day</button>
+                                <button data-value="satellite" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Night</button>
                             </div>
                             <div class="border-t border-gray-200 my-3"></div>
                             <button id="profile-btn" class="w-full flex items-center gap-2 px-1 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition font-semibold text-sm">
@@ -563,6 +563,38 @@
             const PROGRESS_KEY = 'worldQuizProgress';
             const PROFILE_STATS_KEY = 'worldQuizProfileStats';
 
+            // Each play style fills in its own map over time: a country is coloured only
+            // if it's been captured in the mode you're currently viewing.
+            const CAPTURED_KEY = 'worldQuizCaptured';
+            let capturedByMode = { timed: {}, paced: {}, sprint: {}, label: {} };
+            const usesBiome = (t) => t === 'earth' || t === 'satellite'; // Day & Night colour by biome
+            function loadCaptured() {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(CAPTURED_KEY));
+                    if (saved && typeof saved === 'object') {
+                        ['timed', 'paced', 'sprint', 'label'].forEach(m => { capturedByMode[m] = saved[m] || {}; });
+                    }
+                } catch (_) {}
+            }
+            function saveCaptured() {
+                try { localStorage.setItem(CAPTURED_KEY, JSON.stringify(capturedByMode)); } catch (_) {}
+            }
+            function capturedSet(mode) {
+                if (mode === 'explore') return exploredCountries;
+                return capturedByMode[mode] || (capturedByMode[mode] = {});
+            }
+            function isCaptured(name, mode) {
+                mode = mode || playStyle;
+                if (mode === 'explore') return !!(exploredCountries[name] || (profileStats && profileStats.countriesExplored > 0 && profileStats.achievements && profileStats.achievements.explorer10));
+                return !!capturedSet(mode)[name];
+            }
+            function markCaptured(name, mode) {
+                mode = mode || playStyle;
+                if (mode === 'explore') { exploredCountries[name] = true; return; }
+                capturedSet(mode)[name] = true;
+                saveCaptured();
+            }
+
             // --- PROFILE AND STATS ---
             let profileStats;
 
@@ -894,16 +926,16 @@
                 midnight: {
                     url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                    mapBg: '#111827',
+                    mapBg: '#0b1220',
                     styles: {
-                        default: { fillColor: '#6366f1', weight: 1, color: '#a5b4fc', fillOpacity: 0.7 },
-                        guessed: { fillColor: '#16a34a', weight: 1, color: '#86efac', fillOpacity: 0.8 },
-                        selected: { weight: 4, color: '#f97316', fillColor: '#fdba74' },
-                        correctFinished: { fillColor: '#16a34a', weight: 1, color: 'white', fillOpacity: 0.9 },
-                        incorrectFinished: { fillColor: '#dc2626', weight: 1, color: 'white', fillOpacity: 0.9 },
-                        unclickable: { fillColor: '#374151', weight: 1, color: '#6b7280', fillOpacity: 0.5 },
+                        default: { fillColor: '#3b4a63', weight: 1, color: '#5b6b86', fillOpacity: 0.55 },
+                        guessed: { fillColor: '#34d399', weight: 1, color: '#a7f3d0', fillOpacity: 0.9 },
+                        selected: { weight: 3, color: '#fbbf24', fillColor: '#fcd34d', fillOpacity: 0.9 },
+                        correctFinished: { fillColor: '#34d399', weight: 1, color: '#0b1220', fillOpacity: 0.95 },
+                        incorrectFinished: { fillColor: '#f87171', weight: 1, color: '#0b1220', fillOpacity: 0.95 },
+                        unclickable: { fillColor: '#1a2436', weight: 1, color: '#2b3852', fillOpacity: 0.5 },
                     },
-                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-400", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
+                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-indigo-300", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-indigo-500 text-white shadow-lg" }
                 },
                 earth: {
                     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
@@ -934,16 +966,30 @@
                 satellite: {
                     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                    mapBg: '#000000',
+                    mapBg: '#060d18',
                     styles: {
-                        default: { fillColor: '#ffffff', weight: 1.5, color: '#ffffff', fillOpacity: 0.2 },
-                        guessed: { fillColor: '#22c55e', weight: 1.5, color: '#a7f3d0', fillOpacity: 0.4 },
-                        selected: { weight: 4, color: '#fef08a', fillColor: '#fef08a', fillOpacity: 0.4 },
-                        correctFinished: { fillColor: '#22c55e', weight: 1, color: 'white', fillOpacity: 0.6 },
-                        incorrectFinished: { fillColor: '#ef4444', weight: 1, color: 'white', fillOpacity: 0.6 },
-                        unclickable: { fillColor: '#9ca3af', weight: 1, color: '#e5e7eb', fillOpacity: 0.1 },
+                        // Night: a dark version of Day. Uncaptured land sits unlit; captured
+                        // land glows in a dimmed, satellite-view take on its biome colour.
+                        default: { fillColor: '#18241c', weight: 1, color: '#2c3d30', fillOpacity: 0.85 },
+                        selected: { weight: 3, color: '#fde047', fillColor: '#fde047', fillOpacity: 0.55 },
+                        incorrectFinished: { fillColor: '#7f1d1d', weight: 1, color: '#e5e7eb', fillOpacity: 0.85 },
+                        unclickable: { fillColor: '#0f1712', weight: 1, color: '#1c2a1e', fillOpacity: 0.6 },
+
+                        guessed_desert: { fillColor: '#8a6d34', weight: 1, color: '#5c481f', fillOpacity: 0.85 }, // dim sand
+                        guessed_rainforest: { fillColor: '#1e5e3a', weight: 1, color: '#0f3b23', fillOpacity: 0.85 },
+                        guessed_forest: { fillColor: '#25642a', weight: 1, color: '#123a17', fillOpacity: 0.85 },
+                        guessed_temperate: { fillColor: '#4a5e1f', weight: 1, color: '#2f3d12', fillOpacity: 0.85 },
+                        guessed_tundra: { fillColor: '#48606c', weight: 1, color: '#2b3b44', fillOpacity: 0.85 },
+                        guessed_savanna: { fillColor: '#7a6a44', weight: 1, color: '#4f452b', fillOpacity: 0.85 },
+
+                        correctFinished_desert: { fillColor: '#8a6d34', weight: 1, color: 'white', fillOpacity: 0.85 },
+                        correctFinished_rainforest: { fillColor: '#1e5e3a', weight: 1, color: 'white', fillOpacity: 0.85 },
+                        correctFinished_forest: { fillColor: '#25642a', weight: 1, color: 'white', fillOpacity: 0.85 },
+                        correctFinished_temperate: { fillColor: '#4a5e1f', weight: 1, color: 'white', fillOpacity: 0.85 },
+                        correctFinished_tundra: { fillColor: '#48606c', weight: 1, color: 'white', fillOpacity: 0.85 },
+                        correctFinished_savanna: { fillColor: '#7a6a44', weight: 1, color: 'white', fillOpacity: 0.85 },
                     },
-                    classes: { body: "bg-gray-800", container: "bg-gray-900", title: "text-gray-100", settings: "bg-gray-800", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-gray-600 text-white shadow-lg" }
+                    classes: { body: "bg-gray-900", container: "bg-gray-800", title: "text-emerald-300", settings: "bg-gray-900", settingTitle: "text-gray-300", settingRail: "bg-gray-700", settingInactive: "text-gray-400", settingActive: "bg-emerald-600 text-white shadow-lg" }
                 }
             };
             
@@ -1011,6 +1057,7 @@
                     countryPath = pathData.toLowerCase().split(/\s+/);
                     
                     loadProfileStats();
+                    loadCaptured();
                     const savedQuizSequence = loadProgress();
                     
                     if (savedQuizSequence) {
@@ -1061,7 +1108,7 @@
                         if (quizState === 'finished') {
                             const isGuessed = userAnswers[name] || (countryBundles[name] && userAnswers[countryBundles[name]]);
                             if (isGuessed) {
-                                styleKey = (theme === 'earth') ? `correctFinished_${getCountryBiome(name)}` : 'correctFinished';
+                                styleKey = (usesBiome(theme)) ? `correctFinished_${getCountryBiome(name)}` : 'correctFinished';
                             } else {
                                 styleKey = 'incorrectFinished';
                             }
@@ -1070,9 +1117,9 @@
                         } else if (name === 'Antarctica') {
                             styleKey = 'unclickable';
                         } else {
-                            const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                            const isAnswered = isCaptured(name);
                             if (isAnswered) {
-                                styleKey = (theme === 'earth') ? `guessed_${getCountryBiome(name)}` : 'guessed';
+                                styleKey = (usesBiome(theme)) ? `guessed_${getCountryBiome(name)}` : 'guessed';
                             } else {
                                 styleKey = 'default';
                             }
@@ -1305,7 +1352,7 @@
                     }
                     
                     // Immediately update color to green
-                    const styleKey = (theme === 'earth') ? `guessed_${getCountryBiome(name)}` : 'guessed';
+                    const styleKey = (usesBiome(theme)) ? `guessed_${getCountryBiome(name)}` : 'guessed';
                     selectedCountryLayer.setStyle(getStyle(styleKey));
                     getRelatedLayers(selectedCountryLayer).forEach(l => l.setStyle(getStyle(styleKey)));
 
@@ -1378,6 +1425,7 @@
 
                 if (clickedName === correctName) {
                     userAnswers[correctName] = true;
+                    markCaptured(correctName);
                     if (playStyle === 'timed') {
                         timeRemaining += 2;
                         updateTimerDisplay();
@@ -1385,7 +1433,7 @@
                     if (playStyle === 'sprint') processCorrectGuessForCombo(clickedName, correctName);
                     
                     let styleKey;
-                    if (theme === 'earth') {
+                    if (usesBiome(theme)) {
                         const biome = getCountryBiome(clickedName);
                         styleKey = `guessed_${biome}`;
                     } else {
@@ -1448,7 +1496,7 @@
 
             function highlightFeature(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                const isAnswered = isCaptured(name);
                 if (isAnswered || layer === selectedCountryLayer) return;
                 
                 const style = { weight: 3, color: getStyle('selected').color, fillOpacity: getStyle('selected').fillOpacity };
@@ -1459,10 +1507,10 @@
 
             function resetHighlight(layer) {
                 const name = layer.feature.properties.name;
-                const isAnswered = (quizState === 'explore') ? (exploredCountries[name] || profileStats.countriesExplored > 0 && profileStats.achievements.explorer10) : userAnswers[name];
+                const isAnswered = isCaptured(name);
                 
                 let styleKey = isAnswered ? 'guessed' : 'default';
-                if (isAnswered && theme === 'earth') {
+                if (isAnswered && usesBiome(theme)) {
                     styleKey = `guessed_${getCountryBiome(name)}`;
                 }
 
@@ -1500,7 +1548,7 @@
             function styleLabelCountry(layer) {
                 const name = layer.feature.properties.name;
                 const labeled = !!(labelAnswers[name] && labelAnswers[name].trim());
-                const styleKey = labeled ? (theme === 'earth' ? `guessed_${getCountryBiome(name)}` : 'guessed') : 'default';
+                const styleKey = labeled ? (usesBiome(theme) ? `guessed_${getCountryBiome(name)}` : 'guessed') : 'default';
                 const style = getStyle(styleKey);
                 layer.setStyle(style);
                 getRelatedLayers(layer).forEach(l => l.setStyle(style));
@@ -1765,13 +1813,14 @@
 
                     clearInterval(hintRevealInterval);
                     userAnswers[correctName] = true;
+                    markCaptured(correctName);
                     if (playStyle === 'sprint') processCorrectGuessForCombo(guess, correctName);
                     else {
                         handleScoring(guess, correctName);
                     }
                     
                     let styleKey;
-                    if (theme === 'earth') {
+                    if (usesBiome(theme)) {
                         const biome = getCountryBiome(correctName);
                         styleKey = `guessed_${biome}`;
                     } else {
@@ -2123,7 +2172,7 @@
                     userAnswers = {};
                     names.forEach(name => {
                         const label = (labelAnswers[name] || '').trim();
-                        if (label && isGuessCorrect(label, name)) { userAnswers[name] = true; correctCount++; }
+                        if (label && isGuessCorrect(label, name)) { userAnswers[name] = true; correctCount++; markCaptured(name, 'label'); }
                         else {
                             const yours = label ? `you put &ldquo;${label}&rdquo;` : 'left blank';
                             missesHTML += `<div class="p-2 my-1 rounded bg-red-100 text-red-800"><strong>${name}</strong> — ${yours}.</div>`;
@@ -2233,7 +2282,7 @@
                     const isGuessed = userAnswers[countryName] || (countryBundles[countryName] && userAnswers[countryBundles[countryName]]);
 
                     if (isGuessed) {
-                        if (theme === 'earth') {
+                        if (usesBiome(theme)) {
                             const biome = getCountryBiome(countryName);
                             styleKey = `correctFinished_${biome}`;
                         } else {
@@ -2505,10 +2554,10 @@
                 theme: {
                     title: 'Theme',
                     content: `
-                        <p><strong>Voyager:</strong> The classic, light-mode map.</p>
-                        <p><strong>Midnight:</strong> A sleek, dark-mode theme.</p>
-                        <p><strong>Earth:</strong> A terrain-focused, natural-color theme.</p>
-                        <p><strong>Satellite:</strong> High-resolution satellite imagery.</p>`
+                        <p><strong>Light:</strong> The classic, light-mode map.</p>
+                        <p><strong>Dark:</strong> A sleek, dark-mode theme.</p>
+                        <p><strong>Day:</strong> Captured countries glow in their natural biome colours.</p>
+                        <p><strong>Night:</strong> A dark version of Day — captured land in dimmed, satellite-view biome colours.</p>`
                 }
             };
 
