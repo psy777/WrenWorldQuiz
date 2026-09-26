@@ -19,9 +19,11 @@ export type FrameRecord = {
   topWord: string | null;
   words: string[];
   createdAt: number;
+  topSeen?: boolean; // the "top word" popup has been dismissed for this frame
+  doneSeen?: boolean; // the "frame complete" popup has been dismissed for this frame
 };
 
-export type FramePatch = Omit<FrameRecord, "createdAt">;
+export type FramePatch = Omit<FrameRecord, "createdAt" | "topSeen" | "doneSeen">;
 
 type Save = {
   score: number;
@@ -102,6 +104,8 @@ export function recordFrame(f: FramePatch) {
     topWord: (f.topWord ? f.topWord.toUpperCase() : null) ?? prev?.topWord ?? null,
     words: f.words,
     createdAt: prev?.createdAt ?? Date.now(),
+    topSeen: prev?.topSeen ?? false, // preserve "popup dismissed" flags across saves
+    doneSeen: prev?.doneSeen ?? false,
   };
   write(s);
 }
@@ -109,6 +113,21 @@ export function recordFrame(f: FramePatch) {
 // The words the player found in a specific frame instance (for resume).
 export function frameWords(frameId: string): string[] {
   return read().frames[frameId]?.words ?? [];
+}
+
+export function getFrame(frameId: string): FrameRecord | undefined {
+  return read().frames[frameId];
+}
+
+// Remember that a frame's top-word / completion popup has been dismissed, so it
+// isn't shown again for that frame (e.g. after a reload).
+export function markFrameSeen(frameId: string, patch: { topSeen?: boolean; doneSeen?: boolean }) {
+  const s = read();
+  const rec = s.frames[frameId];
+  if (!rec) return;
+  if (patch.topSeen !== undefined) rec.topSeen = patch.topSeen;
+  if (patch.doneSeen !== undefined) rec.doneSeen = patch.doneSeen;
+  write(s);
 }
 
 export function listFrames(limit = 60): FrameRecord[] {

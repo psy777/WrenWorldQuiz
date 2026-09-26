@@ -382,11 +382,32 @@ button.icon:hover, button.icon.on { color: var(--ink); }
 }
 .tile.dl .particle { background: var(--dl); }
 .submitburst .particle { background: var(--tl); }
-.submitburst.top .particle { background: var(--good); width: 5px; height: 5px; }
+.submitburst.top .particle { background: var(--good); width: 6px; height: 6px; }
 @keyframes spark {
   0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
   100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.3); opacity: 0; }
 }
+/* biggest burst: filling the whole frame */
+.completeburst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+.completeburst .particle { width: 8px; height: 8px; animation-duration: 1050ms; }
+.completeburst .particle:nth-child(3n) { background: var(--good); }
+.completeburst .particle:nth-child(3n + 1) { background: var(--tl); }
+.completeburst .particle:nth-child(3n + 2) { background: var(--accent); }
+/* 🏆 next to the top word in the finds list */
+.topmark { margin-left: 6px; font-size: 13px; line-height: 1; }
+/* the finds bar, once the whole frame is filled */
+.fcbar.done { border-color: var(--good); }
+.fcbar.done .fcbar-fill { background: color-mix(in srgb, var(--good) 32%, transparent); }
+.fcbar.done .fcbar-label { color: var(--good); font-weight: 700; }
 
 /* control icons: Settings, New frame, Hint — expand on hover */
 .tools { display: flex; justify-content: center; gap: 10px; margin: 16px 0 8px; }

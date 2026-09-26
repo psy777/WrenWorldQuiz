@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { jget, jpost } from "@/lib/api";
 import { letterValue, type Bonus } from "@/lib/scoring";
-import { frameWords, recordFrame, saveFound } from "@/lib/local-store";
+import { frameWords, getFrame, markFrameSeen, recordFrame, saveFound } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
 // A ring of particles. `n`/`dist` control how many and how far they fly.
@@ -27,7 +27,14 @@ const Burst = ({ mult }: { mult: number }) => (
 // A bigger burst over the whole board on submit; greener/larger for the top word.
 const SubmitBurst = ({ top }: { top: boolean }) => (
   <span className={`submitburst ${top ? "top" : ""}`} aria-hidden>
-    {particles(top ? 30 : 16, top ? 130 : 80)}
+    {particles(top ? 46 : 16, top ? 170 : 80)}
+  </span>
+);
+
+// The biggest celebration — filling the whole frame.
+const CompleteBurst = () => (
+  <span className="completeburst" aria-hidden>
+    {particles(72, 260)}
   </span>
 );
 
@@ -113,10 +120,12 @@ export default function InfiniteMode({
   const [hint, setHint] = useState<Hint | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [statsClosed, setStatsClosed] = useState(false);
+  const [completeClosed, setCompleteClosed] = useState(false);
   const [defWord, setDefWord] = useState<{ word: string; exclude?: string } | null>(null);
   const [showBonus, setShowBonus] = useState(false);
   const [burst, setBurst] = useState<{ id: number; index: number; mult: number } | null>(null);
   const [flash, setFlash] = useState<{ id: number; top: boolean } | null>(null);
+  const [completeBurst, setCompleteBurst] = useState(0);
   const [barBurst, setBarBurst] = useState(0);
   const [submitPop, setSubmitPop] = useState<{ id: number; text: string } | null>(null);
   const seq = useRef(0);
@@ -132,6 +141,7 @@ export default function InfiniteMode({
     setNotice(null);
     setHint(null);
     setStatsClosed(false);
+    setCompleteClosed(false);
     setTyped([]);
     setFinds([]);
     frameStart.current = Date.now();
@@ -145,6 +155,9 @@ export default function InfiniteMode({
       setDailyNo(data.number);
       setFrame({ start: data.start, end: data.end, len: data.len, total: data.total, best: data.best, bonuses: data.bonuses ?? [] });
       setFinds(data.finds ?? []);
+      const rec = getFrame(fid);
+      setStatsClosed(!!rec?.topSeen);
+      setCompleteClosed(!!rec?.doneSeen);
       return;
     }
     const r = resumeRef.current;
@@ -162,6 +175,9 @@ export default function InfiniteMode({
       });
       setFrame({ start: data.start, end: data.end, len: data.len, total: data.total, best: data.best, bonuses: data.bonuses ?? [] });
       setFinds(data.finds ?? []);
+      const rec = getFrame(r.frameId);
+      setStatsClosed(!!rec?.topSeen);
+      setCompleteClosed(!!rec?.doneSeen);
       return;
     }
     frameId.current = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -209,6 +225,11 @@ export default function InfiniteMode({
     onPoints(data.score + timeBonus); // "+N pts" floats up by the profile
     if (data.bonus) setBarBurst((seq.current += 1)); // celebrate a bonus word on the finds bar
     const inTierFound = newFinds.filter((f) => !f.bonus).length;
+    // Filling the whole frame is the goal — the biggest celebration + its own popup.
+    if (data.total > 0 && inTierFound === data.total) {
+      setCompleteBurst((seq.current += 1));
+      setCompleteClosed(false);
+    }
     recordFrame({
       frameId: frameId.current,
       startLetter: frame.start,
@@ -318,6 +339,11 @@ export default function InfiniteMode({
     return () => clearTimeout(t);
   }, [flash]);
   useEffect(() => {
+    if (!completeBurst) return;
+    const t = setTimeout(() => setCompleteBurst(0), 1400);
+    return () => clearTimeout(t);
+  }, [completeBurst]);
+  useEffect(() => {
     if (!barBurst) return;
     const t = setTimeout(() => setBarBurst(0), 1000);
     return () => clearTimeout(t);
@@ -346,6 +372,17 @@ export default function InfiniteMode({
   const bonusFinds = finds.filter((f) => f.bonus);
   const inTierFound = finds.length - bonusFinds.length;
   const wordsPct = frame.total > 0 ? Math.round((inTierFound / frame.total) * 100) : 0;
+  const frameComplete = frame.total > 0 && inTierFound === frame.total;
+  const framePoints = finds.reduce((s, f) => s + f.score, 0); // total points earned on this frame
+
+  const dismissTop = () => {
+    setStatsClosed(true);
+    markFrameSeen(frameId.current, { topSeen: true });
+  };
+  const dismissComplete = () => {
+    setCompleteClosed(true);
+    markFrameSeen(frameId.current, { doneSeen: true });
+  };
 
   return (
     <div className="infinite">
@@ -391,6 +428,7 @@ export default function InfiniteMode({
             );
           })}
           {flash && <SubmitBurst key={flash.id} top={flash.top} />}
+          {completeBurst > 0 && <CompleteBurst key={completeBurst} />}
         </div>
 
         <span className="submit-wrap">
@@ -444,10 +482,13 @@ export default function InfiniteMode({
           <span className="fhcount">
             <span className="muted">your finds</span>
             <span className="fcbar-wrap">
-              <span className="fcbar" title={`${inTierFound} of ${frame.total} words found`}>
+              <span
+                className={`fcbar ${frameComplete ? "done" : ""}`}
+                title={frameComplete ? "Frame complete — every word found!" : `${inTierFound} of ${frame.total} words found`}
+              >
                 <span className="fcbar-fill" style={{ width: `${wordsPct}%` }} />
                 <span className="fcbar-label">
-                  {inTierFound}/{frame.total}
+                  {frameComplete ? `✓ ${inTierFound}/${frame.total}` : `${inTierFound}/${frame.total}`}
                 </span>
               </span>
               {barBurst > 0 && (
@@ -522,7 +563,10 @@ export default function InfiniteMode({
                 onClick={() => setDefWord({ word: f.word })}
                 title="Tap for its definition"
               >
-                <span className="w">{f.word}</span>
+                <span className="w">
+                  {f.word}
+                  {f.rank === 1 && <span className="topmark" title="Top word">🏆</span>}
+                </span>
                 <span className="sc">
                   <b>{f.score}</b> pts
                 </span>
@@ -536,37 +580,83 @@ export default function InfiniteMode({
             ))}
       </div>
 
-      {topFind && !statsClosed && (
-        <div className="modal-backdrop" onClick={() => setStatsClosed(true)}>
+      {topFind && !statsClosed && !frameComplete && (
+        <div className="modal-backdrop" onClick={dismissTop}>
           <div className="statscard" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" aria-label="Close" onClick={() => setStatsClosed(true)}>
+            <button className="modal-close" aria-label="Close" onClick={dismissTop}>
               ×
             </button>
             <div className="big">Top word! 🏆</div>
             <p className="muted" style={{ margin: "6px 0 14px" }}>
               <b style={{ color: "var(--ink)" }}>{topFind.word.toUpperCase()}</b> is the highest-scoring word that fits
-              this frame — {topFind.score} pts.
+              this frame — {topFind.score} pts. Now fill the rest:{" "}
+              <b style={{ color: "var(--ink)" }}>{frame.total - inTierFound}</b> to go.
             </p>
             <div className="statrow">
               <div>
-                <b>{finds.length}</b>
-                <span>guesses</span>
+                <b>
+                  {inTierFound}/{frame.total}
+                </b>
+                <span>words found</span>
+              </div>
+              <div>
+                <b>{framePoints}</b>
+                <span>points so far</span>
               </div>
               <div>
                 <b>{frame.best}</b>
                 <span>top score</span>
               </div>
+            </div>
+            <div className="statbtns">
+              <button className="btn primary" onClick={dismissTop}>
+                Keep filling →
+              </button>
+              {daily ? (
+                <button className="btn" onClick={share}>
+                  Share
+                </button>
+              ) : (
+                <button className="btn" onClick={loadFrame}>
+                  New frame
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {frameComplete && !completeClosed && (
+        <div className="modal-backdrop" onClick={dismissComplete}>
+          <div className="statscard" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" aria-label="Close" onClick={dismissComplete}>
+              ×
+            </button>
+            <div className="big">Frame complete! 🎉</div>
+            <p className="muted" style={{ margin: "6px 0 14px" }}>
+              You found every word that fits{" "}
+              <b style={{ color: "var(--ink)" }}>
+                {frame.start}
+                {"·".repeat(Math.max(1, frame.len - 2))}
+                {frame.end}
+              </b>
+              {bonusFinds.length > 0 ? <> — plus {bonusFinds.length} bonus.</> : "."}
+            </p>
+            <div className="statrow">
+              <div>
+                <b>{framePoints}</b>
+                <span>total points</span>
+              </div>
               <div>
                 <b>{frame.total}</b>
-                <span>words fit</span>
+                <span>words</span>
+              </div>
+              <div>
+                <b>{bonusFinds.length}</b>
+                <span>bonus</span>
               </div>
             </div>
             <div className="statbtns">
-              {inTierFound < frame.total && (
-                <button className="btn" onClick={() => setStatsClosed(true)}>
-                  Continue
-                </button>
-              )}
               {daily ? (
                 <button className="btn primary" onClick={share}>
                   Share result
@@ -576,6 +666,9 @@ export default function InfiniteMode({
                   Next frame →
                 </button>
               )}
+              <button className="btn" onClick={dismissComplete}>
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -646,7 +739,8 @@ export default function InfiniteMode({
                 <b>Hint</b> gives a synonym, a rhyme and where the next-best word ranks. Tap any word for its definition.
               </li>
               <li>
-                <b>Find the top word</b> to bank the frame and unlock a new one. Every word you find adds points.
+                <b>Fill the whole frame</b> — find every word that fits. The top word earns a 🏆; completing the frame is
+                the goal. Every word you find adds points.
               </li>
             </ul>
             <div className="helpkeys">
