@@ -4,29 +4,42 @@ import { useEffect, useMemo, useState } from "react";
 import { listFound, type FoundWord } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
-type Sort = "az" | "hi" | "lo" | "avg";
+type SortKey = "az" | "pts" | "eff";
+type Sort = { key: SortKey; dir: "asc" | "desc" } | null;
 type Def = { word: string; frame?: FoundWord["frame"]; score?: number };
 
+const COLS: { key: SortKey; label: string }[] = [
+  { key: "az", label: "A–Z" },
+  { key: "pts", label: "PTS" },
+  { key: "eff", label: "EFF" },
+];
 const perLetter = (w: FoundWord) => w.score / Math.max(1, w.word.length);
 
 export default function Dictionary() {
   const [words, setWords] = useState<FoundWord[] | null>(null);
   const [def, setDef] = useState<Def | null>(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<Sort>("az");
+  const [sort, setSort] = useState<Sort>(null);
 
   useEffect(() => {
     setWords(listFound());
   }, []);
 
+  // Click a column: off → asc → desc → off. Switching columns starts at asc.
+  const cycle = (key: SortKey) =>
+    setSort((cur) =>
+      !cur || cur.key !== key ? { key, dir: "asc" } : cur.dir === "asc" ? { key, dir: "desc" } : null,
+    );
+
   const shown = useMemo(() => {
     if (!words) return [];
     const needle = q.trim().toLowerCase();
     const list = needle ? words.filter((w) => w.word.includes(needle)) : [...words];
-    if (sort === "az") list.sort((a, b) => a.word.localeCompare(b.word));
-    else if (sort === "hi") list.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word));
-    else if (sort === "lo") list.sort((a, b) => a.score - b.score || a.word.localeCompare(b.word));
-    else list.sort((a, b) => perLetter(b) - perLetter(a) || a.word.localeCompare(b.word));
+    if (!sort) return list; // off → natural order (most recent first)
+    const m = sort.dir === "asc" ? 1 : -1;
+    if (sort.key === "az") list.sort((a, b) => m * a.word.localeCompare(b.word));
+    else if (sort.key === "pts") list.sort((a, b) => m * (a.score - b.score) || a.word.localeCompare(b.word));
+    else list.sort((a, b) => m * (perLetter(a) - perLetter(b)) || a.word.localeCompare(b.word));
     return list;
   }, [words, q, sort]);
 
@@ -42,18 +55,20 @@ export default function Dictionary() {
           onChange={(e) => setQ(e.target.value)}
         />
         <div className="segmented">
-          <button className={sort === "az" ? "on" : ""} onClick={() => setSort("az")}>
-            A–Z
-          </button>
-          <button className={sort === "hi" ? "on" : ""} onClick={() => setSort("hi")}>
-            pts ↓
-          </button>
-          <button className={sort === "lo" ? "on" : ""} onClick={() => setSort("lo")}>
-            pts ↑
-          </button>
-          <button className={sort === "avg" ? "on" : ""} onClick={() => setSort("avg")} title="Average points per letter">
-            pts/ltr ↓
-          </button>
+          {COLS.map(({ key, label }) => {
+            const active = sort?.key === key;
+            return (
+              <button
+                key={key}
+                className={active ? "on" : ""}
+                onClick={() => cycle(key)}
+                title={key === "eff" ? "Efficiency — points per letter" : undefined}
+              >
+                {label}
+                {active ? (sort!.dir === "asc" ? " ↑" : " ↓") : ""}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -75,8 +90,8 @@ export default function Dictionary() {
               title="Tap for its definition"
             >
               <span className="dw">{w.word}</span>
-              <span className="ds" title={sort === "avg" ? `${w.score} pts` : undefined}>
-                {sort === "avg" ? `${perLetter(w).toFixed(1)}/ltr` : w.score}
+              <span className="ds" title={sort?.key === "eff" ? `${w.score} pts` : undefined}>
+                {sort?.key === "eff" ? perLetter(w).toFixed(1) : w.score}
               </span>
             </button>
           ))}
