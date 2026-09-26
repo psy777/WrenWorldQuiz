@@ -79,7 +79,9 @@ type ResumeReq = { start: string; end: string; len: number; bonuses: { index: nu
 // Keep in sync with DAILY_TIER in lib/dictionary.ts — the daily is played at a
 // fixed tier so the frame and its answers are identical for everyone.
 const DAILY_TIER = "10k";
-const FRAME_BONUS = 1000; // extra points for filling the whole frame
+// Completion bonus scales with how hard the frame is to fill: more words and
+// longer words = harder. ~1000 for a typical 8-word, 5-letter frame.
+const completionBonus = (total: number, len: number) => Math.round((total * len * 25) / 10) * 10;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function prettyDate(date: string): string {
   const [, m, d] = date.split("-").map(Number);
@@ -229,12 +231,13 @@ export default function InfiniteMode({
     // Filling the whole frame is the goal — award a one-time bonus on the completing
     // move only (not again for a bonus word found after the frame is already full).
     const justCompleted = data.total > 0 && prevInTier < data.total && inTierFound === data.total;
+    const bonus = justCompleted ? completionBonus(data.total, frame.len) : 0;
     if (justCompleted) {
       setCompleteBurst((seq.current += 1));
       setCompleteClosed(false);
-      addScore(FRAME_BONUS);
+      addScore(bonus);
     }
-    onPoints(data.score + timeBonus + (justCompleted ? FRAME_BONUS : 0)); // "+N pts" floats up by the profile
+    onPoints(data.score + timeBonus + bonus); // "+N pts" floats up by the profile
     recordFrame({
       frameId: frameId.current,
       startLetter: frame.start,
@@ -379,6 +382,7 @@ export default function InfiniteMode({
   const wordsPct = frame.total > 0 ? Math.round((inTierFound / frame.total) * 100) : 0;
   const frameComplete = frame.total > 0 && inTierFound === frame.total;
   const framePoints = finds.reduce((s, f) => s + f.score, 0); // total points earned on this frame
+  const frameBonus = completionBonus(frame.total, frame.len); // scales with frame difficulty
 
   const dismissTop = () => {
     setStatsClosed(true);
@@ -649,11 +653,11 @@ export default function InfiniteMode({
             </p>
             <div className="statrow">
               <div>
-                <b>{framePoints + FRAME_BONUS}</b>
+                <b>{framePoints + frameBonus}</b>
                 <span>total points</span>
               </div>
               <div>
-                <b>+{FRAME_BONUS}</b>
+                <b>+{frameBonus}</b>
                 <span>frame bonus</span>
               </div>
               <div>
