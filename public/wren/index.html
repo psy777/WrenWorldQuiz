@@ -104,18 +104,35 @@
             <div class="flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex items-baseline gap-3 min-w-0">
                     <a href="/" title="All games on wren.gg" class="text-sm font-semibold text-gray-400 hover:text-indigo-600 transition whitespace-nowrap">wren.gg&nbsp;/</a>
-                    <h1 id="main-title" class="text-2xl sm:text-3xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
+                    <h1 id="main-title" class="text-lg sm:text-xl font-bold text-blue-900 transition-colors duration-300">World Map Quiz</h1>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <button id="back-to-quiz-btn" class="hidden bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition shadow-md">Back to Quiz</button>
-                    <button id="profile-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition shadow-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-                        </svg>
-                        Profile
-                    </button>
                     <div id="explored-counter" class="hidden bg-green-100 text-green-800 font-bold text-lg sm:text-xl px-4 py-2 rounded-lg shadow-md"></div>
                     <div id="score-display" class="hidden bg-white bg-opacity-80 text-blue-900 font-bold text-lg sm:text-xl px-4 py-2 rounded-lg shadow-md">Score: 0</div>
+                    <div class="relative flex-shrink-0">
+                        <button id="menu-btn" aria-haspopup="true" aria-expanded="false" title="Menu" class="p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                              <path d="M3 5h14M3 10h14M3 15h14" />
+                            </svg>
+                        </button>
+                        <div id="menu-pop" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-30 text-left">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 px-1">Theme</div>
+                            <div id="theme-options" class="setting-control flex flex-wrap p-1 rounded-lg">
+                                <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
+                                <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
+                                <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
+                                <button data-value="satellite" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Satellite</button>
+                            </div>
+                            <div class="border-t border-gray-200 my-3"></div>
+                            <button id="profile-btn" class="w-full flex items-center gap-2 px-1 py-2 rounded-md text-gray-700 hover:bg-gray-100 transition font-semibold text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                                </svg>
+                                Profile
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <p id="subtitle" class="text-md sm:text-lg text-gray-600 mt-2 transition-colors duration-300">Select your settings and press Start!</p>
@@ -210,18 +227,6 @@
                             <button data-value="hard" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Hard</button>
                             <button data-value="extreme" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Extreme</button>
                             <button data-value="mirror" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Mirror</button>
-                        </div>
-                    </div>
-                     <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <h3 class="setting-title text-lg font-semibold text-gray-700">Theme</h3>
-                            <svg data-setting="theme" xmlns="http://www.w3.org/2000/svg" class="info-icon h-5 w-5 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                        </div>
-                        <div id="theme-options" class="setting-control flex flex-wrap p-1 rounded-lg">
-                            <button data-value="voyager" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm active">Voyager</button>
-                            <button data-value="midnight" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Midnight</button>
-                            <button data-value="earth" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Earth</button>
-                            <button data-value="satellite" class="flex-1 text-center py-1.5 px-2 rounded-md font-medium text-sm">Satellite</button>
                         </div>
                     </div>
                 </div>
@@ -1866,6 +1871,24 @@
                 const value = handleSettingClick(e, 'theme-options');
                 if(value) applyTheme(value);
             });
+
+            // Header menu (hamburger) holding the theme picker + profile.
+            const menuBtn = document.getElementById('menu-btn');
+            const menuPop = document.getElementById('menu-pop');
+            function closeMenu() {
+                menuPop.classList.add('hidden');
+                menuBtn.setAttribute('aria-expanded', 'false');
+            }
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const nowOpen = menuPop.classList.toggle('hidden') === false;
+                menuBtn.setAttribute('aria-expanded', String(nowOpen));
+            });
+            document.addEventListener('click', (e) => {
+                if (!menuPop.classList.contains('hidden') && !menuPop.contains(e.target) && !menuBtn.contains(e.target)) closeMenu();
+            });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+            profileBtn.addEventListener('click', closeMenu);
 
 
             function startQuiz() {
