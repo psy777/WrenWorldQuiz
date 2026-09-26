@@ -2133,9 +2133,10 @@
             }
             
             document.addEventListener('keydown', (e) => {
-                // Enter keeps exploring (same as the Learn / Keep Exploring button),
-                // unless you're typing in a field or a button already has focus.
-                if (e.key === 'Enter' && quizState === 'explore') {
+                // Enter keeps exploring, but only once the Keep Exploring button is up
+                // (i.e. you've finished the current country) — not while its quiz is
+                // still open. Also ignored while typing or when a button has focus.
+                if (e.key === 'Enter' && quizState === 'explore' && !keepExploringBtn.classList.contains('hidden')) {
                     const tag = (e.target && e.target.tagName) || '';
                     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
                     e.preventDefault();
