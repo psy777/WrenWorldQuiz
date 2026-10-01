@@ -132,6 +132,7 @@ export default function InfiniteMode({
   const [barBurst, setBarBurst] = useState(0);
   const [submitPop, setSubmitPop] = useState<{ id: number; text: string } | null>(null);
   const seq = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null); // hidden field that brings up the mobile soft keyboard
   const frameId = useRef("");
   const frameStart = useRef(0); // ms timestamp the current frame opened
   const resumeRef = useRef(resume); // captured at mount; a frame-click remounts this component
@@ -317,27 +318,44 @@ export default function InfiniteMode({
     }
   }, [daily, dailyNo, finds, frame]);
 
+  // Append one letter, firing a burst if it lands on a multiplier tile. Shared by
+  // the physical-keyboard listener and the mobile hidden-input handler.
+  const addChar = useCallback(
+    (key: string) => {
+      setTyped((t) => {
+        if (!frame || t.length >= midLen) return t;
+        const idx = t.length + 1;
+        const mult = frame.bonuses.find((b) => b.index === idx)?.mult;
+        if (mult) setBurst({ id: (seq.current += 1), index: idx, mult });
+        return [...t, key.toUpperCase()];
+      });
+    },
+    [frame, midLen],
+  );
+  const backspace = useCallback(() => {
+    setTyped((t) => t.slice(0, -1));
+    setNotice(null);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // On touch devices the soft keyboard types into the hidden input; let its
+      // onChange handle that path so we don't double-count letters.
+      if (inputRef.current && document.activeElement === inputRef.current) return;
       if (e.key === "Enter") {
         e.preventDefault(); // don't let Enter re-trigger a focused button (e.g. New frame)
         if (e.repeat) return;
         submit();
       } else if (e.key === "Backspace") {
         e.preventDefault();
-        setTyped((t) => t.slice(0, -1));
-        setNotice(null);
+        backspace();
       } else if (/^[a-zA-Z]$/.test(e.key)) {
-        if (!frame || typed.length >= midLen) return;
-        const idx = typed.length + 1;
-        const mult = frame.bonuses.find((b) => b.index === idx)?.mult;
-        if (mult) setBurst({ id: (seq.current += 1), index: idx, mult });
-        setTyped((t) => [...t, e.key.toUpperCase()]);
+        addChar(e.key);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [submit, midLen, typed, frame]);
+  }, [submit, addChar, backspace]);
 
   useEffect(() => {
     if (!burst) return;
@@ -406,7 +424,33 @@ export default function InfiniteMode({
         </div>
       )}
       <div className="playarea">
-        <div className="tiles">
+        {/* Captures the mobile soft keyboard — tapping the tiles focuses it. Visually
+            hidden and non-interactive so it never intercepts taps on the tiles. */}
+        <input
+          ref={inputRef}
+          className="tile-input"
+          value={typed.join("")}
+          onChange={(e) => {
+            const next = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, midLen);
+            for (let k = typed.length; k < next.length; k++) addChar(next[k]);
+            for (let k = next.length; k < typed.length; k++) backspace();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          inputMode="text"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
+          aria-hidden
+          tabIndex={-1}
+          style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1, left: 0, top: 0 }}
+        />
+        <div className="tiles" onPointerDown={() => inputRef.current?.focus()}>
           {Array.from({ length: frame.len }).map((_, i) => {
             const isStart = i === 0;
             const isEnd = i === frame.len - 1;
