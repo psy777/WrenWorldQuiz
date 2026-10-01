@@ -424,33 +424,59 @@ export default function InfiniteMode({
         </div>
       )}
       <div className="playarea">
-        {/* Captures the mobile soft keyboard — tapping the tiles focuses it. Visually
-            hidden and non-interactive so it never intercepts taps on the tiles. */}
-        <input
-          ref={inputRef}
-          className="tile-input"
-          value={typed.join("")}
-          onChange={(e) => {
-            const next = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, midLen);
-            for (let k = typed.length; k < next.length; k++) addChar(next[k]);
-            for (let k = next.length; k < typed.length; k++) backspace();
+        <div
+          className="tiles"
+          onPointerDown={(e) => {
+            // Focus inside the gesture (iOS opens the keyboard only then) and cancel the
+            // default mousedown focus-change, which would blur the input in the same tap.
+            e.preventDefault();
+            inputRef.current?.focus();
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          inputMode="text"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          autoComplete="off"
-          spellCheck={false}
-          aria-hidden
-          tabIndex={-1}
-          style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1, left: 0, top: 0 }}
-        />
-        <div className="tiles" onPointerDown={() => inputRef.current?.focus()}>
+          onClick={() => inputRef.current?.focus()}
+        >
+          {/* Captures the mobile soft keyboard — tapping the tiles focuses it. Lives
+              inside .tiles (position: relative) so focusing it never scrolls the page.
+              16px font size stops iOS from zooming in on focus. */}
+          <input
+            ref={inputRef}
+            className="tile-input"
+            value={typed.join("")}
+            onChange={(e) => {
+              const next = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, midLen);
+              const cur = typed.join("");
+              if (next === cur) return;
+              // Rewind to the common prefix, then append — handles IME replacements,
+              // not just pure appends/deletes, and keeps multiplier bursts firing.
+              let p = 0;
+              while (p < cur.length && p < next.length && cur[p] === next[p]) p++;
+              for (let k = cur.length; k > p; k--) backspace();
+              for (let k = p; k < next.length; k++) addChar(next[k]);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            enterKeyHint="go"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Type letters to fill the gap"
+            tabIndex={-1}
+            style={{
+              position: "absolute",
+              opacity: 0,
+              pointerEvents: "none",
+              width: 1,
+              height: 1,
+              left: 0,
+              top: 0,
+              fontSize: 16,
+            }}
+          />
           {Array.from({ length: frame.len }).map((_, i) => {
             const isStart = i === 0;
             const isEnd = i === frame.len - 1;
@@ -500,7 +526,9 @@ export default function InfiniteMode({
         </div>
 
         <span className="submit-wrap">
-          <button className="btn btn-sm" onClick={submit}>
+          {/* preventDefault keeps focus (and the soft keyboard) on the hidden input
+              when the button is tapped mid-game. */}
+          <button className="btn btn-sm" onPointerDown={(e) => e.preventDefault()} onClick={submit}>
             Submit <b>{liveScore}</b> pts
           </button>
           {submitPop && (
