@@ -29,10 +29,13 @@ type Save = {
   score: number;
   found: Record<string, FoundWord>;
   frames: Record<string, FrameRecord>;
+  // Letters bought with points, per frame: frameId -> word -> how many of its
+  // middle letters are revealed (always left to right).
+  reveals: Record<string, Record<string, number>>;
 };
 
 const KEY = "wg_save";
-const empty = (): Save => ({ score: 0, found: {}, frames: {} });
+const empty = (): Save => ({ score: 0, found: {}, frames: {}, reveals: {} });
 
 function read(): Save {
   if (typeof window === "undefined") return empty();
@@ -40,7 +43,7 @@ function read(): Save {
     const raw = localStorage.getItem(KEY);
     if (!raw) return empty();
     const s = JSON.parse(raw) as Partial<Save>;
-    return { score: s.score ?? 0, found: s.found ?? {}, frames: s.frames ?? {} };
+    return { score: s.score ?? 0, found: s.found ?? {}, frames: s.frames ?? {}, reveals: s.reveals ?? {} };
   } catch {
     return empty();
   }
@@ -59,12 +62,29 @@ export function getTotalScore(): number {
   return read().score;
 }
 
-// Add points to the running total (e.g. a frame-completion bonus); returns the new total.
+// Add points to the running total (a frame-completion bonus, or a negative cost
+// like buying a revealed letter). Never drops below zero; returns the new total.
 export function addScore(points: number): number {
   const s = read();
-  s.score += points;
+  s.score = Math.max(0, s.score + points);
   write(s);
   return s.score;
+}
+
+// How many letters of each word have been revealed in a frame.
+export function getReveals(frameId: string): Record<string, number> {
+  return read().reveals[frameId] ?? {};
+}
+
+// Buy one more letter of `word` in a frame; returns the new revealed count.
+export function addReveal(frameId: string, word: string): number {
+  const s = read();
+  const frame = (s.reveals[frameId] ??= {});
+  const w = word.toLowerCase();
+  const n = (frame[w] ?? 0) + 1;
+  frame[w] = n;
+  write(s);
+  return n;
 }
 
 // Save a freshly found word and (once per distinct word) bank its points plus any

@@ -9,10 +9,10 @@ each experience.
 | Route | What |
 | --- | --- |
 | `/` | The hub — lists the games. |
-| `/wordgap` | **wordgap** — fill the gap between two fixed letters. Distinct per-letter scores, ×2/×3 multiplier tiles, blind ranking, synonym/definition/rhyme hints (via the free [Datamuse](https://www.datamuse.com/api/) API), tiered dictionaries (1k–450k) with bonus words, a personal dictionary, and per-frame history with resume. |
+| `/wordgap` | **wordgap** — fill the gap between two fixed letters. Distinct per-letter scores, ×2/×3 multiplier tiles, blind ranking, an always-visible clue list with buy-a-letter reveals (clues via the free [Datamuse](https://www.datamuse.com/api/) API), tiered dictionaries (1k–450k) with bonus words, a personal dictionary, and per-frame history with resume. |
 | `/wren/index.html` | **World Map Quiz** — a self-contained country-finding game, served statically from `public/wren/`. |
 
-The word engine (`/api/frame`, `/api/frame/guess`, `/api/frame/hint`, `/api/define`,
+The word engine (`/api/frame`, `/api/frame/guess`, `/api/frame/clues`, `/api/define`,
 `/api/frame/resume`) is stateless. Accounts + a personal dictionary/history are stored
 in a local SQLite file (`data/wordgap.db`, git-ignored, created on first run).
 

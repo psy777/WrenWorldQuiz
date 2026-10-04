@@ -234,33 +234,24 @@ export function resumeInfo(
   return { total, best, finds };
 }
 
-// Hint targets: the unfound in-tier words just above the player's best find,
-// nearest first; once topped out, the best remaining, until none are left.
-export function hintCandidates(
+// Every in-tier word that fits a frame, highest score first. Ranks match the
+// guess flow: strictly-higher scores + 1, so tied scores share a rank.
+export function frameClueWords(
   start: string,
   end: string,
   len: number,
   bonuses: Bonus[],
-  found: string[],
   tier: string = "10k",
-  limit = 6,
-): { word: string; score: number }[] {
+): { word: string; score: number; rank: number }[] {
   const d = dict();
   const size = tierSize(tier);
   const arr = d.byFrame.get(keyFor(start.toLowerCase(), end.toLowerCase(), len));
   if (!arr) return [];
-  const foundSet = new Set(found.map((w) => w.toLowerCase()));
   const scored = arr
     .filter((e) => inTier(e, size))
-    .map((e) => ({ word: e.word, score: bonuses.length ? scoreWithBonuses(e.word, bonuses) : e.score }));
-  let bestFound = -Infinity;
-  for (const s of scored) if (foundSet.has(s.word) && s.score > bestFound) bestFound = s.score;
-  const unfound = scored.filter((s) => !foundSet.has(s.word));
-  const above = unfound
-    .filter((s) => s.score > bestFound)
-    .sort((a, b) => a.score - b.score || a.word.localeCompare(b.word));
-  if (above.length) return above.slice(0, limit);
-  return unfound.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word)).slice(0, limit);
+    .map((e) => ({ word: e.word, score: bonuses.length ? scoreWithBonuses(e.word, bonuses) : e.score }))
+    .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word));
+  return scored.map((s) => ({ ...s, rank: scored.reduce((c, o) => c + (o.score > s.score ? 1 : 0), 0) + 1 }));
 }
 
 export type GuessResult =

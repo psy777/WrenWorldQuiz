@@ -569,6 +569,41 @@ button.icon:hover, button.icon.on { color: var(--ink); }
   25% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -20px); }
 }
+
+/* on-screen keyboard: plain buttons, so typing works the same on every device */
+.kb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 460px;
+  margin-top: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.kbrow { display: flex; gap: 5px; justify-content: center; }
+.kbkey {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 40px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation; /* no double-tap zoom on fast typing */
+}
+.kbkey:hover { border-color: var(--line-strong); }
+.kbkey:active { background: color-mix(in srgb, var(--ink) 20%, transparent); }
+.kbkey.kbwide { max-width: 68px; flex: 1.7 1 0; font-size: 11px; letter-spacing: 0.04em; }
 .find { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px dotted var(--line); }
 .find .w { text-transform: uppercase; letter-spacing: 0.08em; flex-shrink: 0; }
 .find .sc { color: var(--dim); font-size: 12px; flex-shrink: 0; min-width: 46px; margin-left: auto; text-align: right; }
@@ -581,6 +616,11 @@ button.icon:hover, button.icon.on { color: var(--ink); }
 .find.hintrow:hover .w em { color: var(--ink); }
 /* the "rhymes with …" note, inline after the synonym */
 .find.hintrow .rhymenote { margin-left: 10px; font-size: 12px; font-style: italic; color: var(--dim); }
+/* masked answer at the start of a clue row; bought letters light up green */
+.cluemask { display: inline-flex; gap: 3px; flex-shrink: 0; font-size: 13px; text-transform: uppercase; }
+.cluemask b { width: 11px; text-align: center; font-weight: 700; color: var(--dim); }
+.cluemask b.fix { color: var(--ink); }
+.cluemask b.rev { color: var(--good); }
 /* bonus words: kept in a bag next to the finds bar, not in the table */
 .bag-wrap { position: relative; display: inline-flex; }
 .bagbtn { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px 4px; }

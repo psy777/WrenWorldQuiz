@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { hintCandidates, frameScoreStats } from "@/lib/dictionary";
+import { frameClueWords } from "@/lib/dictionary";
 import type { Bonus } from "@/lib/scoring";
+
+// How many words get a Datamuse clue lookup per frame. Big-tier frames can hold
+// hundreds of words; the rest still get rows, just without clue text.
+const CLUE_LOOKUP_CAP = 60;
 
 function parseBonuses(raw: unknown, len: number): Bonus[] {
   if (!Array.isArray(raw)) return [];
@@ -12,9 +16,10 @@ function parseBonuses(raw: unknown, len: number): Bonus[] {
     .map((b) => ({ index: b.index, mult: b.mult }));
 }
 
+// Clue text never changes for a word, so let Next cache the Datamuse responses.
 async function rows(url: string): Promise<{ word?: string; score?: number }[]> {
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    const r = await fetch(url, { cache: "force-cache" });
     if (!r.ok) return [];
     return (await r.json()) as { word?: string; score?: number }[];
   } catch {
@@ -83,45 +88,25 @@ async function definitionOf(word: string): Promise<string | null> {
   return text || null;
 }
 
-// A word that (at least somewhat) rhymes with `word` — perfect and near rhymes
-// merged, then the most common one wins so it stays recognizable.
-async function rhymeOf(word: string, reject: (w: string) => boolean): Promise<string | null> {
-  const [perfect, near] = await Promise.all([
-    rows(`https://api.datamuse.com/words?rel_rhy=${encodeURIComponent(word)}&max=12`),
-    rows(`https://api.datamuse.com/words?rel_nry=${encodeURIComponent(word)}&max=12`),
-  ]);
-  const cands = [...perfect, ...near]
-    .map((r) => ({ w: (r.word ?? "").toLowerCase(), s: r.score ?? 0 }))
-    .filter((r) => r.w && !r.w.includes(" ") && !reject(r.w));
-  cands.sort((a, b) => b.s - a.s);
-  return cands[0]?.w ?? null;
-}
-
+// One clue per in-tier word in the frame, highest score first, so the client can
+// show the whole list at once (found words swap their clue row for a find row).
 export async function POST(req: Request) {
-  const { start, end, len, bonuses, found, tier, style } = await req.json().catch(() => ({}));
+  const { start, end, len, bonuses, tier, style } = await req.json().catch(() => ({}));
   if (typeof start !== "string" || typeof end !== "string" || typeof len !== "number")
     return NextResponse.json({ ok: false, reason: "Bad request." }, { status: 400 });
 
   const t = typeof tier === "string" ? tier : "10k";
   const useDef = style === "definition";
   const bz = parseBonuses(bonuses, len);
-  const foundArr: string[] = Array.isArray(found) ? found.filter((w) => typeof w === "string") : [];
-  const candidates = hintCandidates(start, end, len, bz, foundArr, t, 6);
-  if (!candidates.length)
-    return NextResponse.json({ ok: false, reason: "You've found every word — no hints left!" });
+  const words = frameClueWords(start, end, len, bz, t);
+  if (!words.length) return NextResponse.json({ ok: false, reason: "No such frame." });
 
-  // From the next step up, climb until one yields a usable clue.
-  for (const c of candidates) {
-    const w = c.word.toLowerCase();
-    const reject = makeReject(w, start, end, len);
-    const clue = useDef ? await definitionOf(w) : await synonymOf(w, reject);
-    if (clue) {
-      const rhyme = await rhymeOf(w, reject);
-      const { rank, total, best } = frameScoreStats(start, end, len, bz, c.score, t);
-      const key = useDef ? "definition" : "synonym";
-      // `word` is the answer this hint points at; the client only reveals it once it's guessed.
-      return NextResponse.json({ ok: true, word: w, [key]: clue, rhyme, score: c.score, rank, total, best });
-    }
-  }
-  return NextResponse.json({ ok: false, reason: "No hint handy — reach for a rare letter (Q Z X J K)." });
+  const looked = await Promise.all(
+    words.slice(0, CLUE_LOOKUP_CAP).map(async (w) => {
+      const clue = useDef ? await definitionOf(w.word) : await synonymOf(w.word, makeReject(w.word, start, end, len));
+      return { ...w, clue };
+    }),
+  );
+  const rest = words.slice(CLUE_LOOKUP_CAP).map((w) => ({ ...w, clue: null as string | null }));
+  return NextResponse.json({ ok: true, clues: [...looked, ...rest] });
 }

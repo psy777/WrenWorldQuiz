@@ -138,7 +138,7 @@ export default function Home() {
               </button>
               {pointsPop && (
                 <span className="pointspop" key={pointsPop.id} aria-hidden>
-                  +{pointsPop.pts}
+                  {pointsPop.pts >= 0 ? `+${pointsPop.pts}` : pointsPop.pts}
                 </span>
               )}
               {menuOpen && (

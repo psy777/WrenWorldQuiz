@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { jget, jpost } from "@/lib/api";
 import { letterValue, type Bonus } from "@/lib/scoring";
-import { addScore, frameWords, getFrame, markFrameSeen, recordFrame, saveFound } from "@/lib/local-store";
+import { addReveal, addScore, frameWords, getFrame, getReveals, markFrameSeen, recordFrame, saveFound } from "@/lib/local-store";
 import DefinitionModal from "./DefinitionModal";
 
 // A ring of particles. `n`/`dist` control how many and how far they fly.
@@ -52,26 +52,10 @@ type GuessResp =
       bonus: boolean;
       wordTier?: string;
     };
-type HintResp = {
-  ok: boolean;
-  word?: string;
-  synonym?: string;
-  definition?: string;
-  rhyme?: string | null;
-  score?: number;
-  rank?: number;
-  total?: number;
-  reason?: string;
-};
-type Hint = {
-  word: string;
-  synonym: string | null;
-  definition: string | null;
-  rhyme: string | null;
-  score: number;
-  rank: number;
-  total: number;
-};
+// One row of the always-visible clue list: an in-tier answer and its clue text
+// (null when Datamuse had nothing usable — the row still shows, mask only).
+type Clue = { word: string; clue: string | null; score: number; rank: number };
+type CluesResp = { ok: boolean; clues?: Clue[]; reason?: string };
 
 
 type ResumeReq = { start: string; end: string; len: number; bonuses: { index: number; mult: number }[]; frameId: string };
@@ -82,6 +66,11 @@ const DAILY_TIER = "10k";
 // Completion bonus scales with how hard the frame is to fill: more words and
 // longer words = harder. ~1000 for a typical 8-word, 5-letter frame.
 const completionBonus = (total: number, len: number) => Math.round((total * len * 25) / 10) * 10;
+// Points a permanently revealed letter costs (the Reveal button).
+const REVEAL_COST = 25;
+// On-screen keyboard rows — taps are plain button clicks, so typing works on
+// any touch device without soft-keyboard tricks.
+const KB_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function prettyDate(date: string): string {
   const [, m, d] = date.split("-").map(Number);
@@ -120,8 +109,10 @@ export default function InfiniteMode({
   const [finds, setFinds] = useState<Find[]>([]);
   const [notice, setNotice] = useState<{ id: number; text: string; ok?: boolean } | null>(null);
   const [dailyNo, setDailyNo] = useState<number | null>(null);
-  const [hint, setHint] = useState<Hint | null>(null);
-  const [hintLoading, setHintLoading] = useState(false);
+  // Clue list and bought-letter counts, tagged with the frame they belong to —
+  // a box from a previous frame simply reads as "not loaded yet".
+  const [cluesBox, setCluesBox] = useState<{ frame: Frame; style: string; list: Clue[] } | null>(null);
+  const [revealsBox, setRevealsBox] = useState<{ frame: Frame; counts: Record<string, number> } | null>(null);
   const [statsClosed, setStatsClosed] = useState(false);
   const [completeClosed, setCompleteClosed] = useState(false);
   const [defWord, setDefWord] = useState<{ word: string; exclude?: string } | null>(null);
@@ -132,7 +123,6 @@ export default function InfiniteMode({
   const [barBurst, setBarBurst] = useState(0);
   const [submitPop, setSubmitPop] = useState<{ id: number; text: string } | null>(null);
   const seq = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(null); // hidden field that brings up the mobile soft keyboard
   const frameId = useRef("");
   const frameStart = useRef(0); // ms timestamp the current frame opened
   const resumeRef = useRef(resume); // captured at mount; a frame-click remounts this component
@@ -141,12 +131,16 @@ export default function InfiniteMode({
 
   const activeTier = daily ? DAILY_TIER : tier;
 
+  // null until the fetch for *this* frame (and clue style) lands. Reveals are
+  // seeded from local storage in the same callback, so clues ≠ null ⇒ reveals ≠ null.
+  const clues = cluesBox && cluesBox.frame === frame && cluesBox.style === hintStyle ? cluesBox.list : null;
+  const reveals = revealsBox && revealsBox.frame === frame ? revealsBox.counts : null;
+
   // `fresh` = the player asked for a new random frame (New / Next frame). Without it
   // we honour a pending resume. We DON'T consume resumeRef here, so React's dev
   // double-invoke of this effect can't fall through to a random frame.
   const loadFrame = useCallback(async (fresh = false) => {
     setNotice(null);
-    setHint(null);
     setStatsClosed(false);
     setCompleteClosed(false);
     setTyped([]);
@@ -263,35 +257,54 @@ export default function InfiniteMode({
     onScore(totalScore);
   }, [frame, typed, midLen, finds, activeTier, onScore, onPoints]);
 
-  const getHint = useCallback(async () => {
+  // Every word's clue is on screen from the start — fetch the whole list when
+  // the frame (or the clue style setting) changes.
+  useEffect(() => {
     if (!frame) return;
-    setHint(null);
-    setHintLoading(true);
-    const { data } = await jpost<HintResp>("/api/frame/hint", {
+    let stale = false;
+    const fid = frameId.current;
+    const land = (list: Clue[]) => {
+      if (stale) return;
+      setCluesBox({ frame, style: hintStyle, list });
+      setRevealsBox((r) => (r && r.frame === frame ? r : { frame, counts: getReveals(fid) }));
+    };
+    jpost<CluesResp>("/api/frame/clues", {
       start: frame.start,
       end: frame.end,
       len: frame.len,
       bonuses: frame.bonuses,
-      found: finds.map((f) => f.word),
       tier: activeTier,
       style: hintStyle,
-    });
-    if (data.ok && (data.synonym || data.definition)) {
-      setHint({
-        word: data.word ?? "",
-        synonym: data.synonym ?? null,
-        definition: data.definition ?? null,
-        rhyme: data.rhyme ?? null,
-        score: data.score ?? 0,
-        rank: data.rank ?? 0,
-        total: data.total ?? 0,
-      });
-      setNotice(null);
-    } else {
-      setNotice({ id: (seq.current += 1), text: data.reason ?? "No hint available." });
+    })
+      .then(({ data }) => land(data.ok && data.clues ? data.clues : []))
+      .catch(() => land([])); // offline — the finds list still works without clues
+    return () => {
+      stale = true;
+    };
+  }, [frame, activeTier, hintStyle]);
+
+  // The Reveal button: buy the next letter (left to right) of the highest-scoring
+  // unfound word. Revealed letters persist for the frame's lifetime.
+  const revealLetter = () => {
+    if (!frame || !clues) {
+      setNotice({ id: (seq.current += 1), text: "Clues are still loading…" });
+      return;
     }
-    setHintLoading(false);
-  }, [frame, finds, activeTier, hintStyle]);
+    if (!clues.length) {
+      setNotice({ id: (seq.current += 1), text: "Clues aren't available right now." });
+      return;
+    }
+    const foundSet = new Set(finds.map((f) => f.word));
+    const target = clues.find((c) => !foundSet.has(c.word) && (reveals?.[c.word] ?? 0) < frame.len - 2);
+    if (!target) {
+      setNotice({ id: (seq.current += 1), text: "Nothing left to reveal!" });
+      return;
+    }
+    const n = addReveal(frameId.current, target.word);
+    setRevealsBox({ frame, counts: { ...(reveals ?? {}), [target.word]: n } });
+    onScore(addScore(-REVEAL_COST));
+    onPoints(-REVEAL_COST);
+  };
 
   const pickDef = useCallback((word: string) => setDefWord({ word }), []);
 
@@ -339,9 +352,6 @@ export default function InfiniteMode({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // On touch devices the soft keyboard types into the hidden input; let its
-      // onChange handle that path so we don't double-count letters.
-      if (inputRef.current && document.activeElement === inputRef.current) return;
       if (e.key === "Enter") {
         e.preventDefault(); // don't let Enter re-trigger a focused button (e.g. New frame)
         if (e.repeat) return;
@@ -407,6 +417,29 @@ export default function InfiniteMode({
   const framePoints = finds.reduce((s, f) => s + f.score, 0); // total points earned on this frame
   const frameBonus = completionBonus(frame.total, frame.len); // scales with frame difficulty
 
+  const findRow = (f: Find) => (
+    <div
+      key={f.word}
+      className={`find clickable ${f.rank === 1 ? "top" : ""}`}
+      onClick={() => setDefWord({ word: f.word })}
+      title="Tap for its definition"
+    >
+      <span className="w">
+        {f.word}
+        {f.rank === 1 && <span className="topmark" title="Top word">🏆</span>}
+      </span>
+      <span className="sc">
+        <b>{f.score}</b> pts
+      </span>
+      <span className="bar">
+        <span className="bar-fill" style={{ width: `${pointsBar(f.score)}%` }} />
+        <span className="bar-label">
+          {f.score}/{frame.best}
+        </span>
+      </span>
+    </div>
+  );
+
   const dismissTop = () => {
     setStatsClosed(true);
     markFrameSeen(frameId.current, { topSeen: true });
@@ -424,59 +457,7 @@ export default function InfiniteMode({
         </div>
       )}
       <div className="playarea">
-        <div
-          className="tiles"
-          onPointerDown={(e) => {
-            // Focus inside the gesture (iOS opens the keyboard only then) and cancel the
-            // default mousedown focus-change, which would blur the input in the same tap.
-            e.preventDefault();
-            inputRef.current?.focus();
-          }}
-          onClick={() => inputRef.current?.focus()}
-        >
-          {/* Captures the mobile soft keyboard — tapping the tiles focuses it. Lives
-              inside .tiles (position: relative) so focusing it never scrolls the page.
-              16px font size stops iOS from zooming in on focus. */}
-          <input
-            ref={inputRef}
-            className="tile-input"
-            value={typed.join("")}
-            onChange={(e) => {
-              const next = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, midLen);
-              const cur = typed.join("");
-              if (next === cur) return;
-              // Rewind to the common prefix, then append — handles IME replacements,
-              // not just pure appends/deletes, and keeps multiplier bursts firing.
-              let p = 0;
-              while (p < cur.length && p < next.length && cur[p] === next[p]) p++;
-              for (let k = cur.length; k > p; k--) backspace();
-              for (let k = p; k < next.length; k++) addChar(next[k]);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            enterKeyHint="go"
-            inputMode="text"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-            aria-label="Type letters to fill the gap"
-            tabIndex={-1}
-            style={{
-              position: "absolute",
-              opacity: 0,
-              pointerEvents: "none",
-              width: 1,
-              height: 1,
-              left: 0,
-              top: 0,
-              fontSize: 16,
-            }}
-          />
+        <div className="tiles">
           {Array.from({ length: frame.len }).map((_, i) => {
             const isStart = i === 0;
             const isEnd = i === frame.len - 1;
@@ -526,9 +507,7 @@ export default function InfiniteMode({
         </div>
 
         <span className="submit-wrap">
-          {/* preventDefault keeps focus (and the soft keyboard) on the hidden input
-              when the button is tapped mid-game. */}
-          <button className="btn btn-sm" onPointerDown={(e) => e.preventDefault()} onClick={submit}>
+          <button className="btn btn-sm" onClick={submit}>
             Submit <b>{liveScore}</b> pts
           </button>
           {submitPop && (
@@ -538,6 +517,48 @@ export default function InfiniteMode({
           )}
         </span>
 
+        <div className="kb">
+          {KB_ROWS.map((row, r) => (
+            <div className="kbrow" key={r}>
+              {/* blur() so a later physical Enter/Space doesn't re-fire the tapped key */}
+              {r === 2 && (
+                <button
+                  className="kbkey kbwide"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    submit();
+                  }}
+                >
+                  ENTER
+                </button>
+              )}
+              {[...row].map((k) => (
+                <button
+                  key={k}
+                  className="kbkey"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    addChar(k);
+                  }}
+                >
+                  {k}
+                </button>
+              ))}
+              {r === 2 && (
+                <button
+                  className="kbkey kbwide"
+                  aria-label="Backspace"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    backspace();
+                  }}
+                >
+                  ⌫
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {notice && (
@@ -567,9 +588,13 @@ export default function InfiniteMode({
             <span className="toollabel">New frame</span>
           </button>
         )}
-        <button className="toolbtn" onClick={getHint} title="Hint">
+        <button
+          className="toolbtn"
+          onClick={revealLetter}
+          title={`Reveal a letter of the best unfound word (−${REVEAL_COST} pts)`}
+        >
           <span className="ico-mask ico-hint" />
-          <span className="toollabel">Hint</span>
+          <span className="toollabel">Reveal −{REVEAL_COST}</span>
         </button>
       </div>
 
@@ -609,71 +634,60 @@ export default function InfiniteMode({
           </span>
         </div>
 
-          {hintLoading && <div className="find hintrow muted">finding a hint…</div>}
-          {hint &&
-            (() => {
-              const solved = finds.some((f) => f.word === hint.word);
-              return (
-                <div
-                  className={`find hintrow ${solved ? "solved" : ""} ${hint.rank === 1 ? "top" : ""}`}
-                  onClick={() => {
-                    if (solved) setDefWord({ word: hint.word });
-                    else if (hint.synonym) setDefWord({ word: hint.synonym, exclude: hint.word });
-                  }}
-                  title={solved || hint.synonym ? "Tap for its definition" : undefined}
-                >
-                  <span className="w">
-                    {solved ? (
-                      hint.word
-                    ) : (
-                      <>
-                        {hint.definition ? (
-                          <span className="hintdef">“{hint.definition}”</span>
-                        ) : (
-                          <em>{hint.synonym}</em>
-                        )}
-                        {hint.rhyme && <span className="rhymenote">rhymes with “{hint.rhyme}”</span>}
-                      </>
-                    )}
-                  </span>
-                  <span className="sc">
-                    <b>{hint.score}</b> pts
-                  </span>
-                  <span className="bar">
-                    <span className="bar-fill" style={{ width: `${pointsBar(hint.score)}%` }} />
-                    <span className="bar-label">
-                      {hint.score}/{frame.best}
-                    </span>
-                  </span>
-                </div>
-              );
-            })()}
+          {clues === null && <div className="find hintrow muted">loading clues…</div>}
 
-          {[...finds]
-            .filter((f) => !f.bonus && (!hint || f.word !== hint.word))
-            .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word))
-            .map((f) => (
-              <div
-                key={f.word}
-                className={`find clickable ${f.rank === 1 ? "top" : ""}`}
-                onClick={() => setDefWord({ word: f.word })}
-                title="Tap for its definition"
-              >
-                <span className="w">
-                  {f.word}
-                  {f.rank === 1 && <span className="topmark" title="Top word">🏆</span>}
-                </span>
-                <span className="sc">
-                  <b>{f.score}</b> pts
-                </span>
-                <span className="bar">
-                  <span className="bar-fill" style={{ width: `${pointsBar(f.score)}%` }} />
-                  <span className="bar-label">
-                    {f.score}/{frame.best}
-                  </span>
-                </span>
-              </div>
-            ))}
+          {/* Every in-tier word gets a row up front: a clue row while unfound
+              (mask + clue text), swapping to the normal find row once guessed. */}
+          {clues?.length
+            ? clues.map((c) => {
+                const f = finds.find((x) => x.word === c.word);
+                if (f) return findRow(f);
+                const shown = reveals?.[c.word] ?? 0;
+                const synClick = hintStyle !== "definition" && c.clue;
+                return (
+                  <div
+                    key={c.word}
+                    className={`find hintrow ${c.rank === 1 ? "top" : ""}`}
+                    onClick={synClick ? () => setDefWord({ word: c.clue!, exclude: c.word }) : undefined}
+                    title={synClick ? "Tap for the synonym's definition" : undefined}
+                  >
+                    <span className="cluemask" aria-hidden>
+                      <b className="fix">{frame.start}</b>
+                      {Array.from({ length: frame.len - 2 }, (_, k) => (
+                        <b key={k} className={k < shown ? "rev" : ""}>
+                          {k < shown ? c.word[k + 1] : "·"}
+                        </b>
+                      ))}
+                      <b className="fix">{frame.end}</b>
+                    </span>
+                    <span className="w">
+                      {c.clue ? (
+                        hintStyle === "definition" ? (
+                          <span className="hintdef">“{c.clue}”</span>
+                        ) : (
+                          <em>{c.clue}</em>
+                        )
+                      ) : (
+                        <span className="hintdef">no clue for this one — a rare word</span>
+                      )}
+                    </span>
+                    <span className="sc">
+                      <b>{c.score}</b> pts
+                    </span>
+                    <span className="bar">
+                      <span className="bar-fill" style={{ width: `${pointsBar(c.score)}%` }} />
+                      <span className="bar-label">
+                        {c.score}/{frame.best}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })
+            : // clues unavailable (offline / API down) — plain finds list still works
+              [...finds]
+                .filter((f) => !f.bonus)
+                .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word))
+                .map(findRow)}
       </div>
 
       {topFind && !statsClosed && !frameComplete && (
@@ -832,7 +846,8 @@ export default function InfiniteMode({
                 multiply the letter that lands on them.
               </li>
               <li>
-                <b>Hint</b> gives a synonym, a rhyme and where the next-best word ranks. Tap any word for its definition.
+                <b>Every word&apos;s clue</b> is listed below the frame. <b>Reveal</b> buys a letter of the best unfound
+                word for {REVEAL_COST} pts. Tap any found word for its definition.
               </li>
               <li>
                 <b>Fill the whole frame</b> — find every word that fits. The top word earns a 🏆; completing the frame is
