@@ -75,6 +75,20 @@ async function synonymOf(word: string, reject: (w: string) => boolean): Promise<
   );
 }
 
+// A word that (at least somewhat) rhymes with `word` — perfect and near rhymes
+// merged, then the most common one wins so it stays recognizable.
+async function rhymeOf(word: string, reject: (w: string) => boolean): Promise<string | null> {
+  const [perfect, near] = await Promise.all([
+    rows(`https://api.datamuse.com/words?rel_rhy=${encodeURIComponent(word)}&max=12`),
+    rows(`https://api.datamuse.com/words?rel_nry=${encodeURIComponent(word)}&max=12`),
+  ]);
+  const cands = [...perfect, ...near]
+    .map((r) => ({ w: (r.word ?? "").toLowerCase(), s: r.score ?? 0 }))
+    .filter((r) => r.w && !r.w.includes(" ") && !reject(r.w));
+  cands.sort((a, b) => b.s - a.s);
+  return cands[0]?.w ?? null;
+}
+
 // A short definition of `word`, with the word itself masked so it isn't given away.
 async function definitionOf(word: string): Promise<string | null> {
   const r = (await rows(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=d&max=1`)) as {
@@ -103,10 +117,12 @@ export async function POST(req: Request) {
 
   const looked = await Promise.all(
     words.slice(0, CLUE_LOOKUP_CAP).map(async (w) => {
-      const clue = useDef ? await definitionOf(w.word) : await synonymOf(w.word, makeReject(w.word, start, end, len));
-      return { ...w, clue };
+      const reject = makeReject(w.word, start, end, len);
+      const clue = useDef ? await definitionOf(w.word) : await synonymOf(w.word, reject);
+      const rhyme = clue ? await rhymeOf(w.word, reject) : null;
+      return { ...w, clue, rhyme };
     }),
   );
-  const rest = words.slice(CLUE_LOOKUP_CAP).map((w) => ({ ...w, clue: null as string | null }));
+  const rest = words.slice(CLUE_LOOKUP_CAP).map((w) => ({ ...w, clue: null as string | null, rhyme: null as string | null }));
   return NextResponse.json({ ok: true, clues: [...looked, ...rest] });
 }

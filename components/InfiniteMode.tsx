@@ -53,8 +53,8 @@ type GuessResp =
       wordTier?: string;
     };
 // One row of the always-visible clue list: an in-tier answer and its clue text
-// (null when Datamuse had nothing usable — the row still shows, mask only).
-type Clue = { word: string; clue: string | null; score: number; rank: number };
+// (null when Datamuse had nothing usable — the row still shows, score only).
+type Clue = { word: string; clue: string | null; rhyme: string | null; score: number; rank: number };
 type CluesResp = { ok: boolean; clues?: Clue[]; reason?: string };
 
 
@@ -553,7 +553,7 @@ export default function InfiniteMode({
                     backspace();
                   }}
                 >
-                  ⌫
+                  <span className="ico-mask ico-del" />
                 </button>
               )}
             </div>
@@ -644,6 +644,7 @@ export default function InfiniteMode({
                 if (f) return findRow(f);
                 const shown = reveals?.[c.word] ?? 0;
                 const synClick = hintStyle !== "definition" && c.clue;
+                const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 return (
                   <div
                     key={c.word}
@@ -651,24 +652,27 @@ export default function InfiniteMode({
                     onClick={synClick ? () => setDefWord({ word: c.clue!, exclude: c.word }) : undefined}
                     title={synClick ? "Tap for the synonym's definition" : undefined}
                   >
-                    <span className="cluemask" aria-hidden>
-                      <b className="fix">{frame.start}</b>
-                      {Array.from({ length: frame.len - 2 }, (_, k) => (
-                        <b key={k} className={k < shown ? "rev" : ""}>
-                          {k < shown ? c.word[k + 1] : "·"}
-                        </b>
-                      ))}
-                      <b className="fix">{frame.end}</b>
-                    </span>
                     <span className="w">
                       {c.clue ? (
                         hintStyle === "definition" ? (
                           <span className="hintdef">“{c.clue}”</span>
                         ) : (
-                          <em>{c.clue}</em>
+                          <em>{cap(c.clue)}</em>
                         )
                       ) : (
                         <span className="hintdef">no clue for this one — a rare word</span>
+                      )}
+                      {c.rhyme && <span className="rhymenote">, rhymes with &lsquo;{c.rhyme}&rsquo;</span>}
+                      {shown > 0 && (
+                        <span className="revword">
+                          {" ("}
+                          {c.word[0]}
+                          {Array.from({ length: frame.len - 2 }, (_, k) =>
+                            k < shown ? <b key={k}>{c.word[k + 1]}</b> : "·",
+                          )}
+                          {c.word[frame.len - 1]}
+                          {")"}
+                        </span>
                       )}
                     </span>
                     <span className="sc">
