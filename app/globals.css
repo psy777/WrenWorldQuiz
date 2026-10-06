@@ -934,8 +934,26 @@ button.icon:hover, button.icon.on { color: var(--ink); }
 .big { font-size: 26px; font-weight: 700; }
 
 /* ── blackbox ───────────────────────────────────────────── */
-.bb-status { display: flex; justify-content: center; gap: 26px; margin-top: 18px; font-size: 13px; }
+/* mode toggle lives in the nav bar, so it's a touch more compact */
+.bb-mode { align-self: center; }
+.bb-mode button { padding: 5px 10px; font-size: 11px; }
+
+.bb-status { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 26px; margin-top: 18px; font-size: 13px; }
+.bb-status span { white-space: nowrap; }
 .bb-status b { color: var(--ink); }
+
+/* squeeze the nav bar onto one line on phones */
+@media (max-width: 520px) {
+  .bb-wrap .brand { gap: 8px; }
+  .bb-wrap .brandleft { gap: 8px; }
+  .bb-wrap .brand h1 { font-size: 15px; letter-spacing: 0.1em; }
+  .bb-wrap .crumb { display: none; }
+  .bb-mode button { padding: 4px 7px; font-size: 10px; }
+}
+/* ultra-narrow: let the toggle drop to its own line rather than overflow */
+@media (max-width: 355px) {
+  .bb-wrap .brand { flex-wrap: wrap; }
+}
 
 .bb-board {
   --bb-cell: clamp(26px, 8.2vw, 42px);

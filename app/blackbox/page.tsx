@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 const N = 8;
+const DAILY_ATOMS = 4;
 const ATOM_CHOICES = [4, 5] as const;
 // Detour pairs cycle through these; hits use --bad and reflections --tl, so skip those.
 const PAIR_COLORS = ["var(--accent)", "var(--dl)", "var(--good)", "var(--ink)"];
 
+type Mode = "daily" | "infinite";
 type PortMark = { kind: "hit" } | { kind: "reflect" } | { kind: "pair"; n: number };
 type Trace = { type: "hit" } | { type: "reflect" } | { type: "exit"; port: number };
 type Result = { score: number; wrong: number; newBest: boolean };
+type DailySave = { marks: [number, PortMark][]; pairCount: number; guesses: number[]; result: Result | null };
 
 // 32 edge ports: 0-7 top (firing down), 8-15 right (firing left),
 // 16-23 bottom (firing up), 24-31 left (firing right).
@@ -76,13 +79,44 @@ function randomAtoms(count: number): Set<number> {
   return s;
 }
 
+// Deterministic atoms for the daily — everyone with the same date gets the same box.
+function seededAtoms(seed: string, count: number): Set<number> {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  const rand = () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+  const s = new Set<number>();
+  while (s.size < count) s.add(Math.floor(rand() * N * N));
+  return s;
+}
+
+// Local calendar date as YYYY-MM-DD — the day everyone shares.
+function todayKey(): string {
+  const n = new Date();
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`;
+}
+
 function bestKey(count: number): string {
   return `bb_best_${count}`;
+}
+
+function dailyKey(date: string): string {
+  return `bb_daily_${date}`;
 }
 
 export default function BlackBox() {
   const [light, setLight] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [mode, setMode] = useState<Mode>("daily");
+  const [dailyDate, setDailyDate] = useState("");
   const [atomCount, setAtomCount] = useState<number>(4);
   const [atoms, setAtoms] = useState<Set<number>>(new Set());
   const [marks, setMarks] = useState<Map<number, PortMark>>(new Map());
@@ -92,23 +126,50 @@ export default function BlackBox() {
   const [best, setBest] = useState<number | null>(null);
 
   const done = result !== null;
+  const atomsInPlay = mode === "daily" ? DAILY_ATOMS : atomCount;
 
-  const newGame = useCallback((count: number) => {
-    setAtoms(randomAtoms(count));
+  const startGame = useCallback((m: Mode, count: number) => {
     setMarks(new Map());
     setPairCount(0);
     setGuesses(new Set());
     setResult(null);
-    const b = localStorage.getItem(bestKey(count));
-    setBest(b ? Number(b) : null);
+    if (m === "daily") {
+      const date = todayKey();
+      setDailyDate(date);
+      setAtoms(seededAtoms(`bb-${date}`, DAILY_ATOMS));
+      const raw = localStorage.getItem(dailyKey(date));
+      if (raw) {
+        try {
+          const s = JSON.parse(raw) as DailySave;
+          setMarks(new Map(s.marks));
+          setPairCount(s.pairCount);
+          setGuesses(new Set(s.guesses));
+          setResult(s.result);
+        } catch {
+          // corrupt save — fall through to the fresh board already set above
+        }
+      }
+    } else {
+      setAtoms(randomAtoms(count));
+      const b = localStorage.getItem(bestKey(count));
+      setBest(b ? Number(b) : null);
+    }
   }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("wg_theme") === "light";
     setLight(stored);
     document.documentElement.setAttribute("data-theme", stored ? "light" : "dark");
-    newGame(4);
-  }, [newGame]);
+    startGame("daily", DAILY_ATOMS);
+  }, [startGame]);
+
+  // The daily is one shared puzzle per day, so every move is saved — refreshing
+  // the page resumes rather than re-rolling.
+  useEffect(() => {
+    if (mode !== "daily" || !dailyDate) return;
+    const save: DailySave = { marks: [...marks.entries()], pairCount, guesses: [...guesses], result };
+    localStorage.setItem(dailyKey(dailyDate), JSON.stringify(save));
+  }, [mode, dailyDate, marks, pairCount, guesses, result]);
 
   function toggleTheme() {
     setLight((l) => {
@@ -119,9 +180,15 @@ export default function BlackBox() {
     });
   }
 
+  function switchMode(m: Mode) {
+    if (m === mode) return;
+    setMode(m);
+    startGame(m, atomCount);
+  }
+
   function chooseAtomCount(count: number) {
     setAtomCount(count);
-    newGame(count);
+    startGame("infinite", count);
   }
 
   function fire(port: number) {
@@ -144,23 +211,26 @@ export default function BlackBox() {
     setGuesses((g) => {
       const next = new Set(g);
       if (next.has(cell)) next.delete(cell);
-      else if (next.size < atomCount) next.add(cell);
+      else if (next.size < atomsInPlay) next.add(cell);
       return next;
     });
   }
 
   function reveal() {
-    if (done || guesses.size !== atomCount) return;
+    if (done || guesses.size !== atomsInPlay) return;
     let wrong = 0;
     guesses.forEach((g) => {
       if (!atoms.has(g)) wrong += 1;
     });
     const score = marks.size + wrong * 5;
-    const prev = localStorage.getItem(bestKey(atomCount));
-    const newBest = prev === null || score < Number(prev);
-    if (newBest) {
-      localStorage.setItem(bestKey(atomCount), String(score));
-      setBest(score);
+    let newBest = false;
+    if (mode === "infinite") {
+      const prev = localStorage.getItem(bestKey(atomCount));
+      newBest = prev === null || score < Number(prev);
+      if (newBest) {
+        localStorage.setItem(bestKey(atomCount), String(score));
+        setBest(score);
+      }
     }
     setResult({ score, wrong, newBest });
   }
@@ -228,7 +298,7 @@ export default function BlackBox() {
   }
 
   return (
-    <div className="wrap">
+    <div className="wrap bb-wrap">
       <div className="brand">
         <div className="brandleft">
           <Link href="/" className="wordmark" title="All games">
@@ -248,6 +318,16 @@ export default function BlackBox() {
             <span className={`ico-mask ${light ? "ico-moon" : "ico-sun"}`} />
           </button>
         </div>
+        <div className="topright">
+          <div className="segmented bb-mode">
+            <button className={mode === "daily" ? "on" : ""} onClick={() => switchMode("daily")}>
+              Daily
+            </button>
+            <button className={mode === "infinite" ? "on" : ""} onClick={() => switchMode("infinite")}>
+              Infinite
+            </button>
+          </div>
+        </div>
       </div>
 
       {showHelp && (
@@ -259,7 +339,7 @@ export default function BlackBox() {
             <div className="helphead">How to play</div>
             <ul className="helplist">
               <li>
-                <b>{atomCount} atoms</b> are hiding in the box. Fire rays from the edge holes to find them.
+                <b>{atomsInPlay} atoms</b> are hiding in the box. Fire rays from the edge holes to find them.
               </li>
               <li>
                 <b className="bb-key-hit">H</b> — hit. The ray ran straight into an atom and was absorbed.
@@ -275,8 +355,12 @@ export default function BlackBox() {
                 An atom sitting beside your entry hole reflects the ray before it even gets in.
               </li>
               <li>
-                <b>Scoring is golf.</b> Every hole you use costs 1 point. When you&apos;re sure, mark {atomCount} cells
-                in the box and reveal — each wrong guess costs 5. Lowest score wins.
+                <b>Scoring is golf.</b> Every hole you use costs 1 point. When you&apos;re sure, mark {atomsInPlay}{" "}
+                cells in the box and reveal — each wrong guess costs 5. Lowest score wins.
+              </li>
+              <li>
+                <b>Daily</b> is the same box for everyone, one try per day. <b>Infinite</b> deals a fresh box
+                whenever you like.
               </li>
             </ul>
           </div>
@@ -284,20 +368,26 @@ export default function BlackBox() {
       )}
 
       <div className="bb-status">
+        {mode === "daily" ? (
+          <span className="muted">
+            daily <b>{dailyDate || "…"}</b>
+          </span>
+        ) : (
+          best !== null && (
+            <span className="muted">
+              best <b>{best}</b>
+            </span>
+          )
+        )}
         <span className="muted">
           ray points <b>{marks.size}</b>
         </span>
         <span className="muted">
           atoms marked{" "}
           <b>
-            {guesses.size}/{atomCount}
+            {guesses.size}/{atomsInPlay}
           </b>
         </span>
-        {best !== null && (
-          <span className="muted">
-            best <b>{best}</b>
-          </span>
-        )}
       </div>
 
       <div className="bb-board" style={{ gridTemplateColumns: `repeat(${N + 2}, var(--bb-cell))` }}>
@@ -324,32 +414,35 @@ export default function BlackBox() {
       )}
 
       <div className="controls">
-        {!done ? (
-          <button className="btn primary" disabled={guesses.size !== atomCount} onClick={reveal}>
+        {!done && (
+          <button className="btn primary" disabled={guesses.size !== atomsInPlay} onClick={reveal}>
             Reveal atoms
           </button>
-        ) : (
-          <button className="btn primary" onClick={() => newGame(atomCount)}>
-            New game
-          </button>
         )}
-        {!done && (
-          <button className="btn" onClick={() => newGame(atomCount)}>
-            New game
-          </button>
-        )}
-        <div className="segmented" title="Atoms hidden in the box">
-          {ATOM_CHOICES.map((n) => (
-            <button key={n} className={atomCount === n ? "on" : ""} onClick={() => chooseAtomCount(n)}>
-              {n} atoms
+        {mode === "infinite" && (
+          <>
+            <button className={`btn${done ? " primary" : ""}`} onClick={() => startGame("infinite", atomCount)}>
+              New game
             </button>
-          ))}
-        </div>
+            <div className="segmented" title="Atoms hidden in the box">
+              {ATOM_CHOICES.map((n) => (
+                <button key={n} className={atomCount === n ? "on" : ""} onClick={() => chooseAtomCount(n)}>
+                  {n} atoms
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {!done && guesses.size !== atomCount && (
+      {mode === "daily" && done && (
         <p className="hint" style={{ textAlign: "center" }}>
-          fire rays from the edge, then tap {atomCount} cells inside the box where you think the atoms are
+          that&apos;s today&apos;s box — come back tomorrow, or switch to infinite for a fresh one
+        </p>
+      )}
+      {!done && guesses.size !== atomsInPlay && (
+        <p className="hint" style={{ textAlign: "center" }}>
+          fire rays from the edge, then tap {atomsInPlay} cells inside the box where you think the atoms are
         </p>
       )}
     </div>
