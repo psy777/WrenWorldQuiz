@@ -932,3 +932,64 @@ button.icon:hover, button.icon.on { color: var(--ink); }
   100% { opacity: 0; transform: translate(-50%, -8px); }
 }
 .big { font-size: 26px; font-weight: 700; }
+
+/* ── blackbox ───────────────────────────────────────────── */
+.bb-status { display: flex; justify-content: center; gap: 26px; margin-top: 18px; font-size: 13px; }
+.bb-status b { color: var(--ink); }
+
+.bb-board {
+  --bb-cell: clamp(26px, 8.2vw, 42px);
+  display: grid;
+  grid-auto-rows: var(--bb-cell);
+  gap: 4px;
+  justify-content: center;
+  margin: 14px auto 12px;
+  width: max-content;
+  max-width: 100%;
+}
+.bb-corner { width: var(--bb-cell); height: var(--bb-cell); }
+
+.bb-port {
+  width: var(--bb-cell);
+  height: var(--bb-cell);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 1px dashed var(--line);
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 700;
+}
+.bb-port:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); }
+.bb-port:disabled { cursor: default; }
+.bb-port.marked { border-style: solid; border-color: currentColor; }
+.bb-port.hit { color: var(--bad); }
+.bb-port.reflect { color: var(--tl); }
+
+.bb-cell {
+  width: var(--bb-cell);
+  height: var(--bb-cell);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+}
+.bb-cell:hover:not(:disabled) { border-color: var(--line-strong); }
+.bb-cell:disabled { cursor: default; }
+.bb-cell.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.bb-cell.good { border-color: var(--good); background: var(--good); color: #fff; }
+.bb-cell.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--bad); font-size: 17px; }
+.bb-cell.atom { border-color: var(--line-strong); color: var(--ink); }
+
+.bb-result { text-align: center; font-size: 14px; color: var(--dim); margin: 2px 0 6px; }
+.bb-result b { color: var(--ink); }
+.bb-result b.bb-newbest { color: var(--good); }
+.bb-key-hit { color: var(--bad); }
+.bb-key-reflect { color: var(--tl); }

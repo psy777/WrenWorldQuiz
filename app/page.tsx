@@ -7,6 +7,7 @@ type Game = { href: string; title: string; static?: boolean };
 
 const GAMES: Game[] = [
   { href: "/wordgap", title: "Wordgap" },
+  { href: "/blackbox", title: "Black Box" },
   // The quiz is a standalone static app — full navigation, not client routing.
   { href: "/worldquiz", title: "World Map Quiz", static: true },
 ];
